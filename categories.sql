@@ -1,0 +1,1 @@
+SELECT * FROM my_guitar_shop.categories;
