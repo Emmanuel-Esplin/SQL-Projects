@@ -1,3 +1,4 @@
+""" Create a database schema """
 DROP DATABASE IF EXISTS my_web_db;
 CREATE DATABASE my_web_db CHARACTER SET utf8mb4;
 USE my_web_db;

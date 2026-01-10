@@ -1,3 +1,4 @@
+""" Create a stored procedure to insert a new category into the categories table, handling duplicates gracefully """
 DELIMITER //
 CREATE PROCEDURE insert_category(IN cat_name VARCHAR(255))
 BEGIN

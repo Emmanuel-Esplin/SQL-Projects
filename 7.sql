@@ -1,3 +1,4 @@
+""" Create a view combining customer information with their billing and shipping addresses """
 CREATE OR REPLACE VIEW customer_addresses AS
 SELECT 
     c.customer_id, c.email_address, c.last_name, c.first_name,

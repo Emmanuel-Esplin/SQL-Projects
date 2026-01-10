@@ -1,3 +1,4 @@
+""" Create a stored procedure that checks the number of products and returns a message based on the count """
 DELIMITER //
 CREATE PROCEDURE test()
 BEGIN
