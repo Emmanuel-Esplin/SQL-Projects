@@ -1,7 +1,7 @@
 # SQL Projects Repository
 
 ## Overview
-This repository hosts **SQL scripts and exercises** for learning and practicing database design, querying, and optimization. Projects are inspired by textbooks and real-world data engineering scenarios.
+This repository hosts **SQL scripts and exercises** for learning and practicing database design, querying, and optimization. Projects are inspired by textbooks and real-world data scenarios.
 
 ## Contents
 - SQL queries for relational databases
@@ -12,6 +12,7 @@ This repository hosts **SQL scripts and exercises** for learning and practicing 
 - PostgreSQL
 - MySQL
 - SQLite
+- SQL Developer
 
 ## Purpose
 To strengthen SQL skills for data engineering and analytics workflows.
@@ -24,4 +25,4 @@ To strengthen SQL skills for data engineering and analytics workflows.
 2. Run scripts in your preferred SQL environment.
 
 ## GitHub Profile
-https://github.com/EmmanuelEsplin
+https://github.com/Emmanuel-Esplin/SQL-Projects
