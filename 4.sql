@@ -1,8 +1,0 @@
-""" Retrieve category names along with the count of products and the highest price in each category """
-SELECT c.category_name, 
-       COUNT(p.product_id) AS product_count,
-       MAX(p.list_price) AS highest_price
-FROM categories c
-JOIN products p ON c.category_id = p.category_id
-GROUP BY c.category_name
-ORDER BY product_count DESC;
