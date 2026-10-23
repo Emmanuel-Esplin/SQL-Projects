@@ -1,4 +1,4 @@
-""" Create a database schema """
+-- Create a database schema
 DROP DATABASE IF EXISTS my_web_db;
 CREATE DATABASE my_web_db CHARACTER SET utf8mb4;
 USE my_web_db;
@@ -6,7 +6,7 @@ USE my_web_db;
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL COMMENT 'Salted hash (e.g. bcrypt); never store plaintext',
     first_name VARCHAR(100),
     last_name VARCHAR(100)
 ) ENGINE=InnoDB;

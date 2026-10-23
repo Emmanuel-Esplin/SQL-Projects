@@ -18,26 +18,33 @@ erDiagram
     CUT ||--o{ DIAMONDS : "grades"
     COLOR ||--o{ DIAMONDS : "grades"
     CLARITY ||--o{ DIAMONDS : "grades"
+    CARAT_BAND ||..o{ DIAMONDS : "bands (by range, no FK)"
     INVENTORY_SNAPSHOT ||--|| "Daily Reporting" : "captures"
 ```
 
 ## Relationship Details
 
-### 1. **Reference Tables** (Lookup/Domain Values)
+### 1. **GIA 4Cs Reference Tables** (Lookup/Domain Values)
+
+See [gia_4cs.md](gia_4cs.md) for the full grading scales.
 
 #### CUT Table
 - **Primary Key**: `Grade` (ENUM: Excellent, Very Good, Good, Fair, Poor)
 - **Attributes**: 
   - `Grade`: GIA cut grade classification
-  - `multiplier`: Price multiplier (0-2.0 range)
+  - `grade_rank`: Position on the GIA scale (1 = Excellent)
+  - `description`: Light-performance description
+  - `multiplier`: Price multiplier
 - **Purpose**: Stores cut grade reference values used in price calculations
 - **Cardinality**: One-to-Many with DIAMONDS (one cut grade, many diamonds)
 - **Relationship Type**: Master-Detail (reference data)
 
 #### COLOR Table
-- **Primary Key**: `Grade` (CHAR(1): D-Z)
+- **Primary Key**: `Grade` (CHAR(1): D-Z, all 23 grades seeded)
 - **Attributes**:
   - `Grade`: GIA color grade (D=colorless to Z=light)
+  - `grade_rank`: Position on the GIA scale (1 = D)
+  - `category`: Colorless, Near Colorless, Faint, Very Light, Light
   - `multiplier`: Price multiplier
 - **Purpose**: Color grading reference for diamonds
 - **Cardinality**: One-to-Many with DIAMONDS
@@ -47,10 +54,18 @@ erDiagram
 - **Primary Key**: `Grade` (ENUM: FL, IF, VVS1, VVS2, VS1, VS2, SI1, SI2, I1, I2, I3)
 - **Attributes**:
   - `Grade`: GIA clarity grade (FL=flawless to I3=included)
+  - `grade_rank`: Position on the GIA scale (1 = FL)
+  - `category`: Flawless ... Included (6 GIA categories)
   - `multiplier`: Price multiplier
 - **Purpose**: Clarity grading reference
 - **Cardinality**: One-to-Many with DIAMONDS
 - **Relationship Type**: Master-Detail (reference data)
+
+#### CARAT_BAND Table
+- **Primary Key**: `band_name` (e.g. `1.00-1.49 ct`)
+- **Attributes**: `min_carat`, `max_carat` (inclusive, hundredth-of-a-carat precision)
+- **Purpose**: Groups the measured carat weight into reporting bands (used by `v_diamond_4c`)
+- **Cardinality**: Each diamond falls in exactly one band, matched by range rather than FK
 
 ### 2. **Independent Tables** (No Foreign Key Dependencies)
 
@@ -154,8 +169,9 @@ erDiagram
   - `cut_grade`: GIA cut (ENUM or NULL)
   - `color_grade`: GIA color (CHAR(1), D-Z)
   - `clarity_grade`: GIA clarity (ENUM)
-  - `depth`: Depth percentage (nullable)
-  - `table_pct`: Table percentage (nullable)
+  - `depth_pct`: Total depth % (nullable)
+  - `table_pct`: Table % (nullable)
+  - `length_mm`, `width_mm`, `depth_mm`: Measurements (nullable)
   - `status`: ENUM (AVAILABLE, RESERVED, SOLD)
   - `base_price_per_carat`: Price per carat (DECIMAL 10,2)
   - `price_usd`: Final computed price (DECIMAL 12,2)

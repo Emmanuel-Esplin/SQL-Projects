@@ -1,32 +1,56 @@
+-- ========================================================================
+-- Diamond Company Database - Schema
+-- ========================================================================
+-- Run first. WARNING: drops and recreates Diamond_company (all data lost).
+-- Grading follows the GIA 4Cs: Carat, Cut, Color, Clarity.
+-- ========================================================================
 
 DROP DATABASE IF EXISTS Diamond_company;
-CREATE DATABASE IF NOT EXISTS Diamond_company 
-  CHARACTER SET utf8mb4 
+CREATE DATABASE IF NOT EXISTS Diamond_company
+  CHARACTER SET utf8mb4
   COLLATE utf8mb4_0900_ai_ci;
 
 USE Diamond_company;
 
 -- ========================================================================
--- Reference Tables (no foreign keys - these are locked first)
+-- 4Cs Reference Tables (no foreign keys - these are locked first)
+-- grade_rank: 1 = best grade on the GIA scale
 -- ========================================================================
 
 CREATE TABLE CUT(
   Grade ENUM("Excellent", "Very Good", "Good", "Fair", "Poor") PRIMARY KEY COMMENT 'GIA Cut Grade',
+  grade_rank TINYINT UNSIGNED NOT NULL UNIQUE COMMENT 'Position on GIA cut scale (1 = Excellent)',
+  description VARCHAR(255) NOT NULL COMMENT 'GIA description of light performance',
   multiplier DECIMAL(6,3) NOT NULL CHECK (multiplier > 0) COMMENT 'Price multiplier for this cut'
-) ENGINE=InnoDB 
-  COMMENT='Cut grades reference table - base reference';
+) ENGINE=InnoDB
+  COMMENT='GIA cut grades (standard round brilliant)';
 
 CREATE TABLE COLOR(
   Grade CHAR(1) PRIMARY KEY COMMENT 'GIA Color Grade D-Z' CHECK (Grade BETWEEN 'D' AND 'Z'),
+  grade_rank TINYINT UNSIGNED NOT NULL UNIQUE COMMENT 'Position on GIA color scale (1 = D)',
+  category ENUM("Colorless", "Near Colorless", "Faint", "Very Light", "Light") NOT NULL COMMENT 'GIA color range',
   multiplier DECIMAL(6,3) NOT NULL CHECK (multiplier > 0) COMMENT 'Price multiplier for this color'
-) ENGINE=InnoDB 
-  COMMENT='Color grades reference table - base reference';
+) ENGINE=InnoDB
+  COMMENT='GIA color grades D (colorless) to Z (light yellow/brown)';
 
 CREATE TABLE CLARITY(
   Grade ENUM("FL", "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1", "I2", "I3") PRIMARY KEY COMMENT 'GIA Clarity Grade',
+  grade_rank TINYINT UNSIGNED NOT NULL UNIQUE COMMENT 'Position on GIA clarity scale (1 = FL)',
+  category ENUM("Flawless", "Internally Flawless", "Very, Very Slightly Included",
+                "Very Slightly Included", "Slightly Included", "Included") NOT NULL COMMENT 'GIA clarity category',
   multiplier DECIMAL(6,3) NOT NULL CHECK (multiplier > 0) COMMENT 'Price multiplier for this clarity'
-) ENGINE=InnoDB 
-  COMMENT='Clarity grades reference table - base reference';
+) ENGINE=InnoDB
+  COMMENT='GIA clarity grades FL to I3 (11 grades)';
+
+-- Carat is measured, not graded: GIA reports weight to the hundredth of a carat.
+-- Bands group weights for reporting (prices jump at "magic sizes" like 1.00 ct).
+CREATE TABLE CARAT_BAND(
+  band_name VARCHAR(20) PRIMARY KEY COMMENT 'Display label, e.g. 1.00-1.49 ct',
+  min_carat DECIMAL(5,2) NOT NULL UNIQUE CHECK (min_carat >= 0) COMMENT 'Inclusive lower bound',
+  max_carat DECIMAL(5,2) NOT NULL CHECK (max_carat > 0) COMMENT 'Inclusive upper bound',
+  CHECK (max_carat > min_carat)
+) ENGINE=InnoDB
+  COMMENT='Carat weight bands for 4Cs reporting';
 
 -- ========================================================================
 -- Supplier and Employee Tables (independent, can be locked in any order)
@@ -119,12 +143,15 @@ CREATE TABLE DIAMONDS(
   diamond_id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique diamond identifier',
   sku VARCHAR(40) NOT NULL UNIQUE COMMENT 'Stock keeping unit - globally unique',
   rough_id INT NOT NULL COMMENT 'Reference to source rough stone',
-  carat DECIMAL(5,2) NOT NULL CHECK (carat > 0) COMMENT 'Diamond weight in carats',
-  cut_grade ENUM("Excellent", "Very Good", "Good", "Fair", "Poor") COMMENT 'GIA cut grade (nullable before grading)',
+  carat DECIMAL(5,2) NOT NULL CHECK (carat > 0) COMMENT 'GIA carat weight, to the hundredth',
+  cut_grade ENUM("Excellent", "Very Good", "Good", "Fair", "Poor") COMMENT 'GIA cut grade (NULL until graded; GIA grades cut on round brilliants)',
   color_grade CHAR(1) NOT NULL CHECK(color_grade BETWEEN 'D' AND 'Z') COMMENT 'GIA color grade D-Z',
   clarity_grade ENUM("FL", "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "I1", "I2", "I3") NOT NULL COMMENT 'GIA clarity grade',
-  depth DECIMAL(5,2) COMMENT 'Depth percentage',
-  table_pct DECIMAL(5,2) COMMENT 'Table percentage',
+  depth_pct DECIMAL(5,2) CHECK (depth_pct BETWEEN 0 AND 100) COMMENT 'Total depth as % of average diameter',
+  table_pct DECIMAL(5,2) CHECK (table_pct BETWEEN 0 AND 100) COMMENT 'Table width as % of average diameter',
+  length_mm DECIMAL(5,2) CHECK (length_mm >= 0) COMMENT 'Measurement: length (mm)',
+  width_mm DECIMAL(5,2) CHECK (width_mm >= 0) COMMENT 'Measurement: width (mm)',
+  depth_mm DECIMAL(5,2) CHECK (depth_mm >= 0) COMMENT 'Measurement: depth (mm)',
   status ENUM("AVAILABLE", "RESERVED", "SOLD") NOT NULL DEFAULT "AVAILABLE" COMMENT 'Availability status for ordering',
   base_price_per_carat DECIMAL(10,2) NOT NULL CHECK (base_price_per_carat >= 0) COMMENT 'Base price per carat',
   price_usd DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (price_usd >= 0) COMMENT 'Final computed price = carat * base * cut_mult * color_mult * clarity_mult',
@@ -219,17 +246,7 @@ CREATE TABLE INVENTORY_SNAPSHOT(
   COMMENT='Daily inventory snapshots for reporting';
 
 -- ========================================================================
--- Create indexes for non-existent foreign key references
--- ========================================================================
-
-ALTER TABLE CUT ADD KEY idx_grade (Grade);
-ALTER TABLE COLOR ADD KEY idx_grade (Grade);
-ALTER TABLE CLARITY ADD KEY idx_grade (Grade);
-
--- ========================================================================
 -- Set proper transaction isolation level
 -- ========================================================================
 -- Note: This should be set at connection level in application code
 -- For session: SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
-
-COMMIT;
