@@ -1,3 +1,28 @@
+# ---------------------------------------------------------------------------
+# Project-specific
+# ---------------------------------------------------------------------------
+
+# OS / editor artifacts
+.DS_Store
+.Rhistory
+.RData
+.Rproj.user/
+.vscode/
+.idea/
+
+# Generated data (rebuild with diamond_company/scripts/transform_to_gia.py)
+diamond_company/data/processed/
+
+# Local database credentials - never commit these
+.my.cnf
+*.my.cnf
+mylogin.cnf
+.pgpass
+*.env
+
+# ---------------------------------------------------------------------------
+# Python (template)
+# ---------------------------------------------------------------------------
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

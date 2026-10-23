@@ -200,7 +200,7 @@ Activity:
 SQL Operation:
   INSERT INTO DIAMONDS (
     sku, rough_id, carat, cut_grade, color_grade,
-    clarity_grade, depth, table_pct, base_price_per_carat,
+    clarity_grade, depth_pct, table_pct, base_price_per_carat,
     status, created_at
   ) VALUES (
     CONCAT('SKU-', UUID()), ?, ?, ?, ?,
