@@ -1,0 +1,93 @@
+{# Shared form and display helpers.
+   Field ids are f-<prefix><name>, so several forms on one page can share field names. #}
+
+{% macro csrf() -%}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+{%- endmacro %}
+
+{% macro error_summary(errors, prefix="") -%}
+  {% if errors %}
+  <div class="alert alert-error" role="alert" tabindex="-1" aria-labelledby="error-title-{{ prefix }}" data-error-summary>
+    <h2 id="error-title-{{ prefix }}">There is a problem</h2>
+    <ul>
+      {% for name, message in errors.items() %}
+        <li>{% if name != "_form" %}<a href="#f-{{ prefix }}{{ name }}">{{ message }}</a>{% else %}{{ message }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro described(name, errors, hint, prefix="") -%}
+  {%- set ids = [] -%}
+  {%- if hint %}{% set _ = ids.append("h-" ~ prefix ~ name) %}{% endif -%}
+  {%- if errors.get(name) %}{% set _ = ids.append("e-" ~ prefix ~ name) %}{% endif -%}
+  {%- if ids %} aria-describedby="{{ ids|join(' ') }}"{% endif -%}
+  {%- if errors.get(name) %} aria-invalid="true"{% endif -%}
+{%- endmacro %}
+
+{% macro field_messages(name, errors, hint, prefix="") -%}
+  {% if hint %}<p class="hint" id="h-{{ prefix }}{{ name }}">{{ hint }}</p>{% endif %}
+  {% if errors.get(name) %}<p class="field-error" id="e-{{ prefix }}{{ name }}">{{ errors[name] }}</p>{% endif %}
+{%- endmacro %}
+
+{% macro input(name, label, values, errors, type="text", hint=None, required=False, attrs="", prefix="") -%}
+  <div class="field">
+    <label for="f-{{ prefix }}{{ name }}">{{ label }}{% if not required %} <span class="muted">(optional)</span>{% endif %}</label>
+    <input id="f-{{ prefix }}{{ name }}" name="{{ name }}" type="{{ type }}"
+           {%- if type != "password" %} value="{{ values.get(name) if values.get(name) is not none else '' }}"{% endif %}
+           {%- if required %} required{% endif %}{{ described(name, errors, hint, prefix) }} {{ attrs|safe }}>
+    {{ field_messages(name, errors, hint, prefix) }}
+  </div>
+{%- endmacro %}
+
+{% macro select(name, label, options, values, errors, hint=None, required=False, blank="Choose…", prefix="") -%}
+  {# options: list of values, or dict value -> label #}
+  <div class="field">
+    <label for="f-{{ prefix }}{{ name }}">{{ label }}{% if not required %} <span class="muted">(optional)</span>{% endif %}</label>
+    <select id="f-{{ prefix }}{{ name }}" name="{{ name }}"{% if required %} required{% endif %}{{ described(name, errors, hint, prefix) }}>
+      {% if blank is not none %}<option value="">{{ blank }}</option>{% endif %}
+      {% set items = options.items() if options is mapping else zip(options, options) %}
+      {% for value, text in items %}
+        <option value="{{ value }}"{% if values.get(name)|string == value|string %} selected{% endif %}>{{ text }}</option>
+      {% endfor %}
+    </select>
+    {{ field_messages(name, errors, hint, prefix) }}
+  </div>
+{%- endmacro %}
+
+{% macro radios(name, label, options, values, errors, hint=None) -%}
+  <fieldset>
+    <legend>{{ label }}</legend>
+    {% if hint %}<p class="hint" id="h-{{ name }}">{{ hint }}</p>{% endif %}
+    {% if errors.get(name) %}<p class="field-error" id="e-{{ name }}">{{ errors[name] }}</p>{% endif %}
+    <div class="choice-group" id="f-{{ name }}">
+      {% for value, text in options.items() %}
+        <label class="choice">
+          <input type="radio" name="{{ name }}" value="{{ value }}"{% if values.get(name) == value %} checked{% endif %}>
+          {{ text }}
+        </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+  <span class="badge badge-{{ status }}">{{ catalog.STATUSES.get(status, status) }}</span>
+{%- endmacro %}
+
+{% macro polish_badge(state) -%}
+  {% if state == "POLISHED" %}<span class="badge badge-polished">Polished</span>{% else %}<span class="badge badge-neutral">Unpolished</span>{% endif %}
+{%- endmacro %}
+
+{% macro code_link(d) -%}
+  <a class="mono nowrap" href="/diamonds/{{ d.diamond_id }}">{{ d.sku }}</a>
+{%- endmacro %}
+
+{% macro diamond_type(d) -%}
+  {{ d.shape }} · {{ catalog.ORIGINS.get(d.origin, d.origin) }}
+{%- endmacro %}
+
+{% macro grades(d) -%}
+  {{ color_label(d) }} · {{ d.clarity_grade or "-" }}{% if d.cut_grade %} · {{ d.cut_grade }}{% endif %}
+{%- endmacro %}

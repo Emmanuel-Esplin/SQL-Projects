@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Polishers</h1>
+    <p class="muted">Who is working on which stones, and how much weight each job removed.</p>
+  </div>
+</div>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th scope="col">Polisher</th><th scope="col" class="num">Stones held now</th><th scope="col" class="num">Jobs done</th><th scope="col" class="num">Weight removed</th></tr></thead>
+    <tbody>
+    {% for w in workload %}
+      <tr>
+        <td><a href="/polishers/{{ w.employee_id }}">{{ w.full_name }}</a></td>
+        <td class="num">{{ w.open_jobs }}</td>
+        <td class="num">{{ w.completed_jobs }}</td>
+        <td class="num">{{ w.carat_removed|carat }}</td>
+      </tr>
+    {% else %}
+      <tr><td class="empty" colspan="4">No polishers yet. Add employees with the role Polisher on the Admin page.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

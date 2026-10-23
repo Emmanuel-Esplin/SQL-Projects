@@ -1,0 +1,80 @@
+{% from "macros.html" import csrf, error_summary, input, select, status_badge, polish_badge, code_link, grades with context %}
+{% if not_found %}
+  <div class="alert alert-error" role="alert"><p>No stone has the code <span class="mono">{{ code }}</span>.</p></div>
+{% elif stone %}
+  {{ error_summary(errors) }}
+  <div class="card">
+    <p>{{ code_link(stone) }} {{ status_badge(stone.status) }} {{ polish_badge(stone.polish_state) }}</p>
+    <p>{{ stone.shape }} · {{ catalog.ORIGINS[stone.origin] }} · {{ grades(stone) }}</p>
+    <p><strong>Weight on record: <span class="mono">{{ stone.carat|carat }}</span></strong></p>
+  </div>
+
+  {% if delivered %}
+  <p class="mt-lg muted">Sold and handed over to the buyer.</p>
+  {% elif out %}
+  {# ----------------------------------------------------------- check in #}
+  <form class="form mt-lg" method="post" action="/safe/check-in" novalidate>
+    {{ csrf() }}
+    <input type="hidden" name="code" value="{{ stone.sku }}">
+    <h3>Put back in the safe</h3>
+    <p class="muted">Out for {{ catalog.PURPOSES[out.purpose]|lower }} since {{ out.out_since.strftime("%d %b %Y %H:%M") }},
+      released by {{ out.released_by }}{% if out.holder_name %}, held by {{ out.holder_name }}{% endif %}.</p>
+    {{ input("weight_carat", "Weight on the scale now (carats)", values, errors, required=True,
+             hint="A stone that comes back heavier is refused.", attrs='inputmode="decimal" autocomplete="off" class="mono"') }}
+
+    {% if out.purpose == "POLISHING" %}
+    <label class="choice">
+      <input type="checkbox" name="mark_polished"{% if values.get("mark_polished") == "on" %} checked{% endif %}>
+      Polishing is finished: record GIA grades
+    </label>
+    <div class="form-row" data-show-when="mark_polished=on">
+      {% if stone.color_type == "WHITE" %}
+      {{ select("color_grade", "Color (D-Z)", catalog.COLOR_GRADES, values, errors) }}
+      {% endif %}
+      {{ select("clarity_grade", "Clarity", catalog.CLARITY_GRADES, values, errors) }}
+      {{ select("cut_grade", "Cut", catalog.CUT_GRADES, values, errors) }}
+    </div>
+    {% endif %}
+
+    {{ input("notes", "Notes", values, errors) }}
+    <div class="form-actions"><button class="btn btn-primary" type="submit">{{ icon("vault") }} Put back in safe</button></div>
+  </form>
+
+  {% elif stone.status in ("AVAILABLE", "RESERVED", "SOLD") %}
+  {# ---------------------------------------------------------- check out #}
+  <form class="form mt-lg" method="post" action="/safe/check-out" novalidate>
+    {{ csrf() }}
+    <input type="hidden" name="code" value="{{ stone.sku }}">
+    <h3>{{ "Hand over to the buyer" if stone.status == "SOLD" else "Take out of the safe" }}</h3>
+    {% if stone.status == "AVAILABLE" %}{% set purposes = catalog.PURPOSES %}
+    {% elif stone.status == "RESERVED" %}{% set purposes = {"VIEWING": "Viewing", "SALE": "Sale"} %}
+    {% else %}{% set purposes = {"SALE": "Sale (delivery to buyer)"} %}{% endif %}
+    {{ select("purpose", "Reason", purposes, values, errors, required=True) }}
+    <div class="field">
+      <label for="f-holder_employee_id">Who will hold it</label>
+      <p class="hint" id="h-holder_employee_id">Required for polishing and repair.</p>
+      <select id="f-holder_employee_id" name="holder_employee_id" aria-describedby="h-holder_employee_id{% if errors.get('holder_employee_id') %} e-holder_employee_id{% endif %}"
+              {% if errors.get('holder_employee_id') %}aria-invalid="true"{% endif %}>
+        <option value="">Choose…</option>
+        {% if polishers %}
+        <optgroup label="Polishers">
+          {% for e in polishers %}<option value="{{ e.employee_id }}"{% if values.get("holder_employee_id") == e.employee_id|string %} selected{% endif %}>{{ e.full_name }}</option>{% endfor %}
+        </optgroup>
+        {% endif %}
+        {% set polisher_ids = polishers|map(attribute="employee_id")|list %}
+        <optgroup label="Other employees">
+          {% for e in employees if e.employee_id not in polisher_ids %}<option value="{{ e.employee_id }}"{% if values.get("holder_employee_id") == e.employee_id|string %} selected{% endif %}>{{ e.full_name }} ({{ e.role }})</option>{% endfor %}
+        </optgroup>
+      </select>
+      {% if errors.get("holder_employee_id") %}<p class="field-error" id="e-holder_employee_id">{{ errors.holder_employee_id }}</p>{% endif %}
+    </div>
+    {{ input("weight_carat", "Weight on the scale (carats)", values, errors, required=True,
+             hint="Must match the weight on record (±0.01 ct).", attrs='inputmode="decimal" autocomplete="off" class="mono"') }}
+    {{ input("notes", "Instructions or notes", values, errors) }}
+    <div class="form-actions"><button class="btn btn-primary" type="submit">{{ icon("arrow-left-right") }} Take out of safe</button></div>
+  </form>
+
+  {% else %}
+  <p class="mt-lg muted">This stone is {{ catalog.STATUSES[stone.status]|lower }} and cannot leave the safe.</p>
+  {% endif %}
+{% endif %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "macros.html" import code_link, status_badge with context %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Safe</h1>
+    <p class="muted">Weigh every stone on the way out and on the way back in.</p>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="move-heading">
+    <h2 id="move-heading">Move a stone</h2>
+    <form class="form" method="get" action="/safe" hx-get="/safe" hx-target="#stone-panel" hx-push-url="true">
+      <div class="field">
+        <label for="f-lookup">Stone code</label>
+        <p class="hint" id="h-lookup">Scan the QR label or type the code.</p>
+        <div class="code-search">
+          <input id="f-lookup" name="code" type="search" class="mono" value="{{ code }}" autocomplete="off"
+                 spellcheck="false" aria-describedby="h-lookup" data-autofocus>
+          <button class="btn btn-secondary" type="submit">Find</button>
+        </div>
+      </div>
+    </form>
+    <div id="stone-panel" class="mt-lg" aria-live="polite">
+      {% include "safe/_panel.html" %}
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="out-heading">
+    <h2 id="out-heading">Out of the safe now</h2>
+    {% if stones_out %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Code</th><th scope="col">Purpose</th><th scope="col">Held by</th><th scope="col" class="num">Out weight</th></tr></thead>
+        <tbody>
+        {% for s in stones_out %}
+          <tr>
+            <td><a class="mono nowrap" href="/safe?code={{ s.sku }}">{{ s.sku }}</a></td>
+            <td>{{ catalog.PURPOSES[s.purpose] }}{% if s.is_overdue %} <span class="badge badge-overdue">Overdue</span>{% endif %}
+              <div class="muted nowrap">since {{ s.out_since.strftime("%d %b %H:%M") }}</div></td>
+            <td>{{ s.holder_name or "-" }}<div class="muted">by {{ s.released_by }}</div></td>
+            <td class="num">{{ s.weight_out|carat }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Every stone is in the safe.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

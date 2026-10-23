@@ -131,19 +131,28 @@ BEGIN
     VALUES (v_supplier_id, CURRENT_DATE(), v_total_carat, 0, 'CUT');
     SET v_rough_id = LAST_INSERT_ID();
 
+    -- The 2022 dataset holds natural, polished round brilliants only
     INSERT INTO DIAMONDS (
-      sku, rough_id, carat, cut_grade, color_grade, clarity_grade,
+      sku, rough_id, shape, origin, color_type, polish_state,
+      carat, cut_grade, color_grade, clarity_grade,
       depth_pct, table_pct, length_mm, width_mm, depth_mm,
       base_price_per_carat, price_usd, `status`, certified, certification_number
     )
     SELECT
-      sku, v_rough_id, carat, cut_grade, color_grade, clarity_grade,
+      sku, v_rough_id, 'Round', 'NATURAL', 'WHITE', 'POLISHED',
+      carat, cut_grade, color_grade, clarity_grade,
       depth_pct, table_pct, length_mm, width_mm, depth_mm,
       ROUND(price_usd / (carat * grade_multiplier), 2),
       price_usd, 'AVAILABLE', certified, NULL
     FROM tmp_valid_import;
 
     SET p_imported = ROW_COUNT();
+
+    INSERT INTO WEIGHT_LOG (diamond_id, weight_carat, polish_state, reason, recorded_by)
+    SELECT d.diamond_id, d.carat, 'POLISHED', 'INTAKE', NULL
+    FROM DIAMONDS d
+    WHERE d.rough_id = v_rough_id;
+
     COMMIT;
   END IF;
 

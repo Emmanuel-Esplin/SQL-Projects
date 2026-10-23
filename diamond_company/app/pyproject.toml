@@ -1,0 +1,9 @@
+[project]
+name = "diamond-tracker"
+version = "0.1.0"
+description = "Local web app for the Diamond Company database"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

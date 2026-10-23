@@ -1,0 +1,42 @@
+{% from "macros.html" import code_link, status_badge, polish_badge, diamond_type with context %}
+<p class="muted" role="status">{{ "{:,}".format(total) }} stone{{ "" if total == 1 else "s" }}{% if pages > 1 %} · page {{ page }} of {{ "{:,}".format(pages) }}{% endif %}</p>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Code</th>
+        <th scope="col">Type</th>
+        <th scope="col">Polish</th>
+        <th scope="col" class="num">Weight</th>
+        <th scope="col">Color</th>
+        <th scope="col">Clarity</th>
+        <th scope="col">Cut</th>
+        {% if user.sees_prices %}<th scope="col" class="num">Price</th>{% endif %}
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for d in rows %}
+      <tr>
+        <td>{{ code_link(d) }}</td>
+        <td class="nowrap">{{ diamond_type(d) }}</td>
+        <td>{{ polish_badge(d.polish_state) }}</td>
+        <td class="num">{{ d.carat|carat }}</td>
+        <td>{{ color_label(d) }}</td>
+        <td>{{ d.clarity_grade or "-" }}</td>
+        <td>{{ d.cut_grade or "-" }}</td>
+        {% if user.sees_prices %}<td class="num">{{ d.price_usd|money }}</td>{% endif %}
+        <td>{{ status_badge(d.status) }}</td>
+      </tr>
+    {% else %}
+      <tr><td class="empty" colspan="9">No stones match these filters.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if pages > 1 %}
+<nav class="pagination" aria-label="Pages">
+  {% if page > 1 %}<a class="btn btn-secondary btn-small" href="/diamonds{{ query_with(request, page=page - 1) }}">Previous</a>{% else %}<span></span>{% endif %}
+  {% if page < pages %}<a class="btn btn-secondary btn-small" href="/diamonds{{ query_with(request, page=page + 1) }}">Next</a>{% endif %}
+</nav>
+{% endif %}

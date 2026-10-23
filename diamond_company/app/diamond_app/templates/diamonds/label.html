@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header no-print">
+  <div>
+    <h1>Label · <span class="mono">{{ d.sku }}</span></h1>
+    <p class="muted">Print on plain paper or label stock and attach to the stone's parcel.</p>
+  </div>
+  <div class="form-actions">
+    <form method="get" class="form-actions">
+      <label for="copies">Copies</label>
+      <input id="copies" name="copies" type="number" min="1" max="24" value="{{ copies }}" class="input-narrow">
+      <button class="btn btn-secondary" type="submit">Update</button>
+    </form>
+    <button class="btn btn-primary" type="button" data-print>{{ icon("printer") }} Print</button>
+    <a href="/diamonds/{{ d.diamond_id }}">Back to diamond</a>
+  </div>
+</div>
+
+<div class="label-sheet">
+  {% for _ in range(copies) %}
+  <div class="label">
+    <img src="/diamonds/{{ d.diamond_id }}/qr.svg" alt="QR code linking to {{ qr_target }}">
+    <div>
+      <div class="code">{{ d.sku }}</div>
+      <div>{{ d.shape }} · {{ catalog.ORIGINS[d.origin] }}</div>
+      <div>{{ d.carat|carat }} · {{ catalog.POLISH_STATES[d.polish_state] }}</div>
+      {% if d.color_grade or d.fancy_hue or d.clarity_grade or d.cut_grade %}
+      <div>{{ color_label(d) }} · {{ d.clarity_grade or "-" }}{% if d.cut_grade %} · {{ d.cut_grade }}{% endif %}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

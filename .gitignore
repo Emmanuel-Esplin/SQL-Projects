@@ -13,6 +13,10 @@
 # Generated data (rebuild with diamond_company/scripts/transform_to_gia.py)
 diamond_company/data/processed/
 
+# Diamond Tracker app: uploaded certificates and local settings
+diamond_company/app/storage/
+diamond_company/app/.env
+
 # Local database credentials - never commit these
 .my.cnf
 *.my.cnf

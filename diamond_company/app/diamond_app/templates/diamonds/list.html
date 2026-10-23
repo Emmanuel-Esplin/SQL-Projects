@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Diamonds</h1>
+    <p class="muted">Every tracked stone, rough and polished.</p>
+  </div>
+  {% if user.has("SAFE_KEEPER") %}
+  <a class="btn btn-primary" href="/diamonds/new">{{ icon("plus") }} Register diamond</a>
+  {% endif %}
+</div>
+
+<form class="card form mt-md" method="get" action="/diamonds"
+      hx-get="/diamonds" hx-target="#results" hx-push-url="true" hx-trigger="change, submit"
+      aria-label="Filter diamonds">
+  <div class="form-row">
+    <div class="field">
+      <label for="f-q">Code contains</label>
+      <input id="f-q" name="q" type="search" value="{{ q }}" class="mono" autocomplete="off"
+             hx-get="/diamonds" hx-trigger="input changed delay:400ms" hx-target="#results" hx-push-url="true" hx-include="closest form">
+    </div>
+    {% set labels = {"status": "Status", "shape": "Shape", "origin": "Origin", "polish_state": "Polish",
+                     "color_type": "Color type", "color_grade": "Color", "clarity_grade": "Clarity"} %}
+    {% set options = {"status": catalog.STATUSES, "shape": catalog.SHAPES, "origin": catalog.ORIGINS,
+                      "polish_state": catalog.POLISH_STATES, "color_type": catalog.COLOR_TYPES,
+                      "color_grade": catalog.COLOR_GRADES, "clarity_grade": catalog.CLARITY_GRADES} %}
+    {% for name, label in labels.items() %}
+    <div class="field">
+      <label for="f-{{ name }}">{{ label }}</label>
+      <select id="f-{{ name }}" name="{{ name }}">
+        <option value="">All</option>
+        {% set opts = options[name] %}
+        {% for value, text in (opts.items() if opts is mapping else zip(opts, opts)) %}
+          <option value="{{ value }}"{% if filters[name] == value %} selected{% endif %}>{{ text }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-secondary" type="submit">Apply filters</button>
+    <a href="/diamonds">Clear filters</a>
+  </div>
+</form>
+
+<div id="results" class="mt-lg" aria-live="polite">
+  {% include "diamonds/_table.html" %}
+</div>
+{% endblock %}

@@ -2,11 +2,18 @@
 -- Triggers
 -- ========================================================================
 -- Run after 03_stored_procedures.sql. Change detection uses the NULL-safe
--- operator (<=>) because cut_grade and certification_number may be NULL.
+-- operator (<=>) because grades and certification_number may be NULL.
+-- changed_by records @app_user, which the web app sets on every
+-- connection; scripts and direct SQL fall back to 'SYSTEM_TRIGGER'.
 -- ========================================================================
 
 USE Diamond_company;
 
+DROP TRIGGER IF EXISTS trg_custody_events_no_update;
+DROP TRIGGER IF EXISTS trg_custody_events_no_delete;
+DROP TRIGGER IF EXISTS trg_weight_log_no_update;
+DROP TRIGGER IF EXISTS trg_weight_log_no_delete;
+DROP TRIGGER IF EXISTS trg_certificates_before_insert;
 DROP TRIGGER IF EXISTS trg_diamonds_before_insert;
 DROP TRIGGER IF EXISTS trg_diamonds_after_update;
 DROP TRIGGER IF EXISTS trg_diamonds_after_delete;
@@ -53,8 +60,8 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Base price cannot be negative';
   END IF;
 
-  -- Validate color grade
-  IF NEW.color_grade IS NULL OR NEW.color_grade NOT BETWEEN 'D' AND 'Z' THEN
+  -- Validate color grade (NULL is allowed for fancy and unpolished stones)
+  IF NEW.color_grade IS NOT NULL AND NEW.color_grade NOT BETWEEN 'D' AND 'Z' THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid color grade (D-Z)';
   END IF;
 
@@ -99,7 +106,7 @@ BEGIN
         'old_base_price', OLD.base_price_per_carat,
         'new_base_price', NEW.base_price_per_carat
       ),
-      'SYSTEM_TRIGGER');
+      COALESCE(@app_user, 'SYSTEM_TRIGGER'));
   END IF;
 
   -- Log all status changes
@@ -113,7 +120,7 @@ BEGIN
         'old_price', OLD.price_usd,
         'new_price', NEW.price_usd
       ),
-      'SYSTEM_TRIGGER');
+      COALESCE(@app_user, 'SYSTEM_TRIGGER'));
   END IF;
 
   -- Log certification changes
@@ -127,7 +134,7 @@ BEGIN
         'old_cert_num', OLD.certification_number,
         'new_cert_num', NEW.certification_number
       ),
-      'SYSTEM_TRIGGER');
+      COALESCE(@app_user, 'SYSTEM_TRIGGER'));
   END IF;
 
 END$$
@@ -155,7 +162,7 @@ BEGIN
       'certified', OLD.certified,
       'certification_number', OLD.certification_number
     ),
-    'SYSTEM_TRIGGER');
+    COALESCE(@app_user, 'SYSTEM_TRIGGER'));
 END$$
 
 -- ========================================================================
@@ -178,7 +185,7 @@ BEGIN
         'weight_carat', NEW.weight_carat,
         'cost_usd', NEW.cost_usd
       ),
-      'SYSTEM_TRIGGER');
+      COALESCE(@app_user, 'SYSTEM_TRIGGER'));
   END IF;
 END$$
 
@@ -202,7 +209,7 @@ BEGIN
         'old_amount', OLD.total_amount,
         'new_amount', NEW.total_amount
       ),
-      'SYSTEM_TRIGGER');
+      COALESCE(@app_user, 'SYSTEM_TRIGGER'));
   END IF;
 END$$
 
@@ -266,7 +273,7 @@ BEGIN
       'price_at_sale', NEW.price_at_sale,
       'quantity', NEW.quantity
     ),
-    'SYSTEM_TRIGGER');
+    COALESCE(@app_user, 'SYSTEM_TRIGGER'));
 END$$
 
 -- ========================================================================
@@ -290,7 +297,58 @@ BEGIN
         'start_date', NEW.start_date,
         'end_date', NEW.end_date
       ),
-      'SYSTEM_TRIGGER');
+      COALESCE(@app_user, 'SYSTEM_TRIGGER'));
+  END IF;
+END$$
+
+-- ========================================================================
+-- CUSTODY_EVENTS / WEIGHT_LOG: insert-only ledgers
+-- ========================================================================
+-- Purpose: The safe ledger and weight history are evidence. Mistakes are
+-- corrected by recording a new event (e.g. WEIGHT_LOG reason CORRECTION),
+-- never by editing or deleting history.
+-- ========================================================================
+CREATE TRIGGER trg_custody_events_no_update
+BEFORE UPDATE ON CUSTODY_EVENTS
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Custody events are permanent and cannot be changed';
+END$$
+
+CREATE TRIGGER trg_custody_events_no_delete
+BEFORE DELETE ON CUSTODY_EVENTS
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Custody events are permanent and cannot be deleted';
+END$$
+
+CREATE TRIGGER trg_weight_log_no_update
+BEFORE UPDATE ON WEIGHT_LOG
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Weight history is permanent; record a CORRECTION instead';
+END$$
+
+CREATE TRIGGER trg_weight_log_no_delete
+BEFORE DELETE ON WEIGHT_LOG
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Weight history is permanent and cannot be deleted';
+END$$
+
+-- ========================================================================
+-- CERTIFICATES: Before Insert Trigger
+-- ========================================================================
+-- Purpose: Lab certificates only exist for polished stones (defense in
+-- depth: sp_add_certificate checks this too)
+-- ========================================================================
+CREATE TRIGGER trg_certificates_before_insert
+BEFORE INSERT ON CERTIFICATES
+FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM DIAMONDS
+                 WHERE diamond_id = NEW.diamond_id AND polish_state = 'POLISHED') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Certificates can only be added to polished diamonds';
   END IF;
 END$$
 

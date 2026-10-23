@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+  <title>{% block title %}{{ title or "Diamond Tracker" }}{% endblock %} · Diamond Tracker</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body{% if user %} hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}'{% endif %}>
+{% block body %}
+<a class="skip-link" href="#main">Skip to main content</a>
+<div class="layout">
+  <aside class="sidebar" aria-label="Primary">
+    <a class="brand" href="/">{{ icon("gem") }} Diamond Tracker</a>
+    {% set section = section|default("") %}
+    <nav class="nav" aria-label="Main navigation">
+      {% macro nav_item(href, name, label, key) -%}
+        <a href="{{ href }}"{% if section == key %} aria-current="page"{% endif %}>{{ icon(name) }}<span class="nav-label">{{ label }}</span></a>
+      {%- endmacro %}
+      {{ nav_item("/", "layout-dashboard", "Dashboard", "dashboard") }}
+      {{ nav_item("/diamonds", "gem", "Diamonds", "diamonds") }}
+      {% if user.has("SAFE_KEEPER") %}{{ nav_item("/safe", "vault", "Safe", "safe") }}{% endif %}
+      {{ nav_item("/polishers", "hammer", "Polishers", "polishers") }}
+      {% if user.has("SAFE_KEEPER") %}{{ nav_item("/repairs", "wrench", "Repairs", "repairs") }}{% endif %}
+      {{ nav_item("/certificates", "file-badge", "Certificates", "certificates") }}
+      {% if user.has("SALES") %}{{ nav_item("/sales", "shopping-bag", "Sales", "sales") }}{% endif %}
+      {% if user.has() %}{{ nav_item("/admin", "users", "Admin", "admin") }}{% endif %}
+    </nav>
+    <div class="sidebar-footer">
+      <div><strong>{{ user.full_name }}</strong></div>
+      <div>{{ user.role_label }}</div>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+        <button class="btn-link" type="submit">Log out</button>
+      </form>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <form class="code-search" method="get" action="/search" role="search">
+        <label class="visually-hidden" for="code-search">Find a diamond by code</label>
+        <input id="code-search" type="search" name="code" placeholder="Scan or type a code, e.g. DC-26-7K3M9Q"
+               autocomplete="off" spellcheck="false" class="mono">
+        <button class="btn btn-secondary" type="submit">{{ icon("search") }}<span>Find</span></button>
+      </form>
+    </header>
+    <main id="main" class="content" tabindex="-1">
+      {% if flash %}<div class="alert alert-{{ flash.kind }}" role="status"><p>{{ flash.message }}</p></div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}
+</body>
+</html>

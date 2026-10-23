@@ -31,6 +31,16 @@ GIA grades the cut of standard round brilliants on five levels, based on brightn
 | N-R | N, O, P, Q, R | Very Light |
 | S-Z | S ... Z | Light |
 
+### Fancy colors
+
+Stones with a distinct hue (yellow, pink, blue and so on) are graded outside the D–Z scale. They have `color_type = 'FANCY'`, a `fancy_hue`, and a `fancy_intensity` on the GIA fancy scale: Faint, Very Light, Light, Fancy Light, Fancy, Fancy Intense, Fancy Vivid, Fancy Deep, Fancy Dark. A fancy stone never has a D–Z `color_grade`, and CHECK constraints enforce this. Fancy stones are priced manually, because the D–Z multipliers don't apply.
+
+## Origin and polish state
+
+- **Origin.** `origin` records whether a stone is `NATURAL` or `LAB_GROWN`. The two are graded on the same 4C scales.
+- **Unpolished stones.** These are rough or partly worked stones, with `polish_state = 'UNPOLISHED'`. They are weighed but may have no grades yet.
+- **Polished stones.** When a stone becomes `POLISHED`, the database requires a clarity grade, plus a D–Z color grade if it is white. Each weighing goes into `WEIGHT_LOG`, so the rough weight, the polished weight and the weight lost in polishing are all kept.
+
 ## Clarity
 
 | Grade | GIA category |

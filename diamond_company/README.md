@@ -1,6 +1,13 @@
 # Diamond Company Database
 
-A MySQL 8.0+ database for a diamond business, covering the whole flow: buying rough stones from suppliers, cutting and polishing, grading on the **GIA 4Cs** (Carat, Cut, Color, Clarity), pricing, and selling to customers. It includes deadlock-safe stored procedures, audit triggers, reporting views, and a CSV import of about 54,000 diamonds.
+A MySQL 8.0+ database for a diamond business, covering the whole flow: buying rough stones from suppliers, cutting and polishing, grading on the **GIA 4Cs** (Carat, Cut, Color, Clarity), pricing, and selling to customers. It includes deadlock-safe stored procedures, audit triggers, reporting views and a CSV import of about 54,000 diamonds.
+
+**Diamond Tracker** (`app/`) is a free, local web app on top of the database. It covers:
+- registering stones (shape, origin, color, clarity, weight, polished or unpolished) and printing QR labels;
+- the safe check-out and check-in ledger, including who handled each stone;
+- polishers, repairs and certificates;
+- lineage from rough lot to finished stones;
+- sales.
 
 ## Project layout
 
@@ -13,7 +20,8 @@ diamond_company/
 │   ├── 04_triggers.sql
 │   ├── 05_import_procedures.sql   Staging table + sp_import_diamonds
 │   ├── 06_views.sql
-│   └── 07_sample_data.sql     Small demo dataset
+│   └── 07_sample_data.sql     Small demo dataset (no user accounts)
+├── app/                       Diamond Tracker web app (FastAPI)
 ├── scripts/
 │   ├── transform_to_gia.py    Raw Kaggle CSV -> GIA-standard CSV
 │   └── load_diamonds.sql      Client-side LOAD DATA + import call
@@ -28,7 +36,7 @@ diamond_company/
 
 ## Setup
 
-Requires MySQL 8.0 or later and Python 3. Run these commands from inside `diamond_company/`. Use your own MySQL account; `-p` prompts for the password, so it never ends up in your shell history or in this repo.
+Requires MySQL 8.0 or later and Python 3.12 or later. Run these commands from inside `diamond_company/`. Use your own MySQL account; `-p` prompts for the password, so it never ends up in your shell history or in this repo.
 
 ```bash
 # 1. Deploy schema, reference data, procedures, triggers, views, sample data
@@ -44,16 +52,80 @@ The import is re-runnable, because rows whose SKU already exists are skipped. It
 
 To avoid typing the password for every script, store it with `mysql_config_editor set --login-path=diamond --user=<user> --password` and connect with `mysql --login-path=diamond`. Never commit `.my.cnf` or `.mylogin.cnf` files; they are gitignored.
 
+## Diamond Tracker web app
+
+Everything it uses is free and open source, and it works offline: fonts, icons and HTMX are bundled.
+
+### First run
+
+```bash
+cd app
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# A MySQL account for the app with only the rights it needs (see the file)
+mysql -u root -p -e "CREATE USER 'diamond_app'@'localhost' IDENTIFIED BY '<choose a password>';"
+mysql -u root -p < scripts/grant_app_privileges.sql
+
+cp .env.example .env       # fill in DT_DB_PASSWORD and DT_SESSION_SECRET
+.venv/bin/python scripts/create_admin.py     # prompts for the admin password
+.venv/bin/uvicorn diamond_app.main:app --host 127.0.0.1 --port 8000
+```
+
+Open http://127.0.0.1:8000, log in as the admin, then on the **Admin** page:
+1. Add employees. Give polishers the job role "Polisher".
+2. Add a login for each person who uses the app.
+
+**Scanning labels with a phone.** Set `DT_BASE_URL` to the computer's LAN address (for example `http://192.168.1.20:8000`) and start uvicorn with `--host 0.0.0.0`. Phones on the same network can then open a stone by scanning its QR label. A USB barcode scanner also works in any code box.
+
+### Roles
+
+| Role | Can |
+|---|---|
+| Admin | Everything, including users, employees, customers, suppliers and rough lots |
+| Safe keeper | Register stones, check them out and in, send them for repair, split rough, upload certificates |
+| Polisher | See the dashboard, the diamonds, and their own work. Prices are hidden. |
+| Sales | Reserve diamonds for customers and mark orders paid, shipped or cancelled |
+
+### How tracking works
+
+- **Codes.** Every stone gets a code like `DC-26-7K3M9Q`: the year plus 6 random Crockford base32 characters. That alphabet has no I, L, O or U, so codes are hard to misread. The code is printed on a QR label.
+- **Safe ledger.** Every movement out of and back into the safe is a row in `CUSTODY_EVENTS`. Each row records who moved the stone, who held it, why, and what it weighed. Rows can never be edited or deleted.
+- **Weighing.** A stone must match its recorded weight (±0.01 ct) before it can leave the safe.
+  - A stone that comes back heavier is refused as a possible swap.
+  - So is one whose weight changed during a viewing or sale.
+  - Polishing may remove weight; the app records how much, for each polisher.
+- **Lineage.** A stone records the rough lot it came from. Rough can be split into pieces, and each piece gets its own code and a link to its parent. The diamond page shows the whole family tree.
+- **Certificates.** These are PDF, JPEG or PNG files, checked by their content and stored in `app/storage/` (gitignored) with a SHA-256 fingerprint. They can only be added to polished stones.
+- **Statuses.**
+
+  | Status | Meaning |
+  |---|---|
+  | In stock | In the safe |
+  | In polishing | Out with a polisher |
+  | In repair | Out for repair |
+  | Being sold | Reserved on an order |
+  | Sold | Paid or shipped |
+  | Split | Cut into child stones |
+
+### Tests
+
+The tests rebuild `Diamond_company` from `sql/`, so run them **only against a throwaway MySQL server**:
+
+```bash
+DT_TEST_DB_HOST=127.0.0.1 DT_TEST_DB_PORT=<port> DT_TEST_DB_USER=root DT_TEST_ALLOW_RESET=1 .venv/bin/pytest
+```
+
 ## GIA 4Cs
 
 | C | Column | Validated against |
 |---|---|---|
 | Carat | `DIAMONDS.carat` (to 0.01 ct) | `CHECK (carat > 0)`; grouped by `CARAT_BAND` |
 | Cut | `DIAMONDS.cut_grade` | FK to `CUT` (Excellent … Poor) |
-| Color | `DIAMONDS.color_grade` | FK to `COLOR` (D … Z) |
+| Color | `DIAMONDS.color_grade`, or `fancy_hue` + `fancy_intensity` for fancy colors | FK to `COLOR` (D … Z) |
 | Clarity | `DIAMONDS.clarity_grade` | FK to `CLARITY` (FL … I3) |
 
-Price formula: `carat × base_price_per_carat × cut × color × clarity multipliers`. Details are in [docs/gia_4cs.md](docs/gia_4cs.md).
+CHECK constraints enforce what a polished stone must carry: a clarity grade, plus a D–Z color if it is white, or a hue if it is fancy. Unpolished stones may leave these empty. Price formula: `carat × base_price_per_carat × cut × color × clarity multipliers`. Details are in [docs/gia_4cs.md](docs/gia_4cs.md).
 
 ## Stored procedures
 
@@ -61,9 +133,14 @@ Every procedure returns `p_success` and `p_error_message` OUT parameters rather 
 
 | Procedure | Purpose |
 |---|---|
+| `sp_register_diamond(actor, lot, parent, shape, origin, color type, …)` | Register a stone, generate its code, log its intake weight |
+| `sp_check_out_diamond(diamond, purpose, holder, weight, actor, …)` | Take a stone out of the safe (polishing, repair, viewing, sale) |
+| `sp_check_in_diamond(diamond, weight, actor, mark_polished, grades…, …)` | Put it back; optionally record its polished grades |
+| `sp_split_diamond(parent, '1.20, 0.85', actor, …)` | Split rough into child stones |
+| `sp_add_certificate(diamond, lab, report, …)` | Record a lab certificate for a polished stone |
 | `sp_compute_price(diamond_id, …)` | Recalculate `price_usd` from the 4Cs |
 | `sp_grade_diamond(diamond_id, cut, color, clarity, …)` | Validate GIA grades, apply them, reprice |
-| `sp_place_order(customer_id, diamond_id, OUT order_id, …)` | Create an order and reserve the stone atomically |
+| `sp_place_order(customer_id, diamond_id, OUT order_id, …)` | Reserve a polished stone on a new order |
 | `sp_fulfill_order(order_id, status, …)` | PAID/SHIPPED → diamonds SOLD; CANCELLED → AVAILABLE |
 | `sp_create_inventory_snapshot(date, …)` | One inventory row per day |
 | `sp_import_diamonds(OUT imported, OUT rejected, OUT error)` | Validate staged CSV rows and insert them |
@@ -77,7 +154,7 @@ SELECT @ok, @err;
 
 ### Concurrency
 
-- **Lock order.** Every transaction locks tables in this order: reference tables → `ROUGH_STONES` → `WORK_ORDERS` → `ORDERS` → `DIAMONDS` → `ORDER_ITEMS` → `AUDIT_LOG`.
+- **Lock order.** Order and pricing procedures lock tables in this order: reference tables → `ROUGH_STONES` → `ORDERS` → `DIAMONDS` → `ORDER_ITEMS` → `AUDIT_LOG`. Custody procedures lock the stone's `DIAMONDS` row first, then write `WORK_ORDERS`, `CUSTODY_EVENTS` and `WEIGHT_LOG`, so every action on one stone runs one at a time.
 - **Retries.** Each attempt runs in its own block. On a deadlock (1213) or lock-wait timeout (1205), the procedure rolls back, waits 0.1 s × attempt, and retries, at most 3 times. Any other error rolls back and returns its message without retrying.
 - **Locking reads.** Procedures use `SELECT … FOR UPDATE` on rows they change and `FOR SHARE` on reference rows.
 
@@ -85,17 +162,23 @@ SELECT @ok, @err;
 
 | View | Contents |
 |---|---|
-| `v_diamond_4c` | Every diamond with grade ranks, GIA color/clarity category and carat band |
-| `v_diamond_catalog` | Available diamonds only |
+| `v_diamond_4c` | Every stone with type, grade ranks, GIA color/clarity category and carat band |
+| `v_diamond_catalog` | Polished diamonds in stock |
+| `v_stones_out_of_safe` | Stones out of the safe now: who released them, who holds them, overdue flag |
+| `v_work_order_weights` | Weight out and back for every polishing or repair job |
+| `v_polisher_workload` | Open jobs, completed jobs and carats removed per employee |
+| `v_diamond_lineage` | Each stone's root ancestor, depth and code path |
+| `v_status_summary` | Stone count, carats and value per status |
 | `v_grading_distribution` | Stone count and average price per carat band × cut × color × clarity |
 | `v_sales_by_month` | Paid and shipped revenue by month |
-| `v_inventory_value` | Count and value of available stock |
+| `v_inventory_value` | Count and value of stock in the safe |
 
 ## Triggers
 
-- **Validation.** `DIAMONDS` checks carat, base price and color grade on insert. `ORDER_ITEMS` checks that the diamond and order exist, and that quantity and price are valid.
-- **Audit log.** Triggers write JSON entries to `AUDIT_LOG` for price-affecting 4C changes, status changes, certification changes and deletes.
+- **Validation.** `DIAMONDS` checks carat, base price and color grade on insert. `ORDER_ITEMS` checks that the diamond and order exist, and that quantity and price are valid. `CERTIFICATES` accepts only polished stones.
+- **Insert-only ledgers.** `CUSTODY_EVENTS` and `WEIGHT_LOG` rows cannot be updated or deleted.
+- **Audit log.** Triggers write JSON entries to `AUDIT_LOG` for price-affecting 4C changes, status changes, certification changes and deletes. `changed_by` is the logged-in app user (via `@app_user`), or `SYSTEM_TRIGGER` for scripts.
 
 ## Data source
 
-`data/raw/diamonds_prices_2022.csv` is the "Diamonds Prices 2022" dataset from Kaggle (53,943 rows).
+`data/raw/diamonds_prices_2022.csv` is the "Diamonds Prices 2022" dataset from Kaggle (53,943 rows). It is imported as natural, polished round brilliants.
