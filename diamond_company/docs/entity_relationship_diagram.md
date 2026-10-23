@@ -19,6 +19,15 @@ erDiagram
     COLOR ||--o{ DIAMONDS : "grades"
     CLARITY ||--o{ DIAMONDS : "grades"
     CARAT_BAND ||..o{ DIAMONDS : "bands (by range, no FK)"
+    DIAMONDS |o--o{ DIAMONDS : "parent_of (lineage)"
+    DIAMONDS ||--o{ WORK_ORDERS : "worked_on"
+    DIAMONDS ||--o{ CUSTODY_EVENTS : "moves"
+    DIAMONDS ||--o{ WEIGHT_LOG : "weighed"
+    DIAMONDS ||--o{ CERTIFICATES : "certified_by"
+    EMPLOYEES |o--o| APP_USERS : "logs_in_as"
+    APP_USERS ||--o{ CUSTODY_EVENTS : "moves_stone"
+    EMPLOYEES ||--o{ CUSTODY_EVENTS : "holds_stone"
+    WORK_ORDERS ||--o{ CUSTODY_EVENTS : "opened_closed_by"
     INVENTORY_SNAPSHOT ||--|| "Daily Reporting" : "captures"
 ```
 
@@ -133,21 +142,21 @@ See [gia_4cs.md](gia_4cs.md) for the full grading scales.
 #### WORK_ORDERS Table
 - **Primary Key**: `work_order_id` (INT AUTO_INCREMENT)
 - **Foreign Keys**:
-  - `rough_id` → ROUGH_STONES (required)
+  - `diamond_id` → DIAMONDS (the stone being worked on)
+  - `rough_id` → ROUGH_STONES (lot-level jobs); at least one of the two is required
   - `employee_id` → EMPLOYEES (required)
 - **Attributes**:
   - `work_order_id`: Unique order identifier
-  - `rough_id`: Rough stone being worked on
-  - `employee_id`: Assigned employee
+  - `work_type`: ENUM (POLISH, REPAIR, RECUT)
+  - `employee_id`: Assigned employee (the polisher or repairer)
   - `start_date`: Work start date
   - `end_date`: Work completion date (nullable)
   - `status`: ENUM (OPEN, IN_PROGRESS, DONE, CANCELLED)
+  - `notes`: Instructions or repair reason
   - `created_at`, `updated_at`: Timestamps
-- **Purpose**: Track diamond cutting and polishing work
+- **Purpose**: Track cutting, polishing and repair jobs. `sp_check_out_diamond` opens one and `sp_check_in_diamond` closes it.
 - **Cardinality**:
-  - Many-to-One with ROUGH_STONES
-  - Many-to-One with EMPLOYEES
-- **Unique Constraints**: `uk_rough_pending` (rough_id, status) - ensures only one active work order per stone
+  - Many-to-One with DIAMONDS, ROUGH_STONES and EMPLOYEES
 - **Indexes**: PRIMARY KEY, idx_status, idx_rough_id, idx_employee_id, idx_rough_status
 - **Purpose of unique constraint**: Deadlock prevention - prevents concurrent modifications
 
@@ -169,10 +178,14 @@ See [gia_4cs.md](gia_4cs.md) for the full grading scales.
   - `cut_grade`: GIA cut (ENUM or NULL)
   - `color_grade`: GIA color (CHAR(1), D-Z)
   - `clarity_grade`: GIA clarity (ENUM)
+  - `parent_diamond_id`: Stone this one was cut from (lineage, nullable)
+  - `shape`, `origin` (NATURAL / LAB_GROWN)
+  - `color_type` (WHITE / FANCY), `fancy_hue`, `fancy_intensity`
+  - `polish_state` (UNPOLISHED / POLISHED); polished stones must carry clarity, and a D-Z color if white
   - `depth_pct`: Total depth % (nullable)
   - `table_pct`: Table % (nullable)
   - `length_mm`, `width_mm`, `depth_mm`: Measurements (nullable)
-  - `status`: ENUM (AVAILABLE, RESERVED, SOLD)
+  - `status`: ENUM (AVAILABLE, IN_POLISHING, IN_REPAIR, RESERVED, SOLD, SPLIT)
   - `base_price_per_carat`: Price per carat (DECIMAL 10,2)
   - `price_usd`: Final computed price (DECIMAL 12,2)
   - `certified`: Boolean certification flag
@@ -241,7 +254,28 @@ See [gia_4cs.md](gia_4cs.md) for the full grading scales.
 - **Indexes**: PRIMARY KEY, idx_order_id, idx_diamond_id, uk_order_diamond
 - **Lock Order**: Locked second (after ORDERS, before DIAMONDS)
 
-### 6. **Audit and Reporting Tables**
+### 6. **Tracking Tables** (Diamond Tracker app)
+
+#### APP_USERS Table
+- **Primary Key**: `user_id`
+- **Attributes**: `username` (unique), `full_name`, `password_hash` (argon2id, never plaintext), `role` (ADMIN, SAFE_KEEPER, POLISHER, SALES), `is_active`, `last_login_at`
+- **Foreign Keys**: `employee_id` → EMPLOYEES (unique; required for polishers)
+
+#### CUSTODY_EVENTS Table (insert-only)
+- **Primary Key**: `event_id`
+- **Attributes**: `event_type` (CHECK_OUT, CHECK_IN), `purpose` (POLISHING, REPAIR, VIEWING, SALE), `weight_carat` (weighed at the event), `notes`, `occurred_at`
+- **Foreign Keys**: `diamond_id` → DIAMONDS; `actor_user_id` → APP_USERS (who took the stone out or put it back); `holder_employee_id` → EMPLOYEES (who held it); `work_order_id` → WORK_ORDERS
+- **Purpose**: The safe ledger. A stone is out of the safe when its latest event is CHECK_OUT. Triggers block UPDATE and DELETE.
+
+#### WEIGHT_LOG Table (insert-only)
+- **Attributes**: `diamond_id`, `weight_carat`, `polish_state`, `reason` (INTAKE, CHECK_OUT, CHECK_IN, SPLIT, CORRECTION), `recorded_by` → APP_USERS, `recorded_at`
+- **Purpose**: Every weighing, so the rough weight, the polished weight and the weight lost in polishing are all kept
+
+#### CERTIFICATES Table
+- **Attributes**: `lab`, `report_number` (unique per lab), `issue_date`, `stored_filename` (random name on disk), `original_filename`, `mime_type`, `sha256`, `uploaded_by` → APP_USERS
+- **Foreign Keys**: `diamond_id` → DIAMONDS (polished stones only, enforced by trigger)
+
+### 7. **Audit and Reporting Tables**
 
 #### AUDIT_LOG Table (Immutable)
 - **Primary Key**: `audit_id` (BIGINT AUTO_INCREMENT)

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, error_summary, input, select with context %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Admin</h1>
+    <p class="muted">People, customers and rough lots.</p>
+  </div>
+</div>
+
+{% set ue, uv = form_errors.get("user", {}), form_values.get("user", {}) %}
+<section class="card" id="users" aria-labelledby="users-heading">
+  <h2 id="users-heading">Users and roles</h2>
+  <p class="hint">Admin: everything. Safe keeper: register stones, safe, repairs, certificates. Polisher: sees their own work, no prices. Sales: reserve and sell.</p>
+  <div class="table-wrap mt-md">
+    <table>
+      <thead><tr><th scope="col">Username</th><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Last login</th><th scope="col">Actions</th></tr></thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td class="mono">{{ u.username }}</td>
+          <td>{{ u.full_name }}{% if u.employee_name %}<div class="muted">Employee: {{ u.employee_name }}</div>{% endif %}</td>
+          <td>{{ role_labels[u.role] }}{% if not u.is_active %} <span class="badge badge-neutral">Inactive</span>{% endif %}</td>
+          <td class="nowrap">{{ u.last_login_at.strftime("%d %b %Y %H:%M") if u.last_login_at else "Never" }}</td>
+          <td>
+            <div class="form-actions">
+            {% if u.user_id != user.user_id %}
+              <form method="post" action="/admin/users/{{ u.user_id }}/active">{{ csrf() }}
+                <input type="hidden" name="active" value="{{ '0' if u.is_active else '1' }}">
+                <button class="btn btn-secondary btn-small" type="submit">{{ "Deactivate" if u.is_active else "Activate" }}</button>
+              </form>
+            {% endif %}
+              <details>
+                <summary>Reset password</summary>
+                <form class="form mt-md" method="post" action="/admin/users/{{ u.user_id }}/password">{{ csrf() }}
+                  <label for="pw-{{ u.user_id }}">New password for {{ u.username }}</label>
+                  <input id="pw-{{ u.user_id }}" name="password" type="password" autocomplete="new-password" minlength="12" required>
+                  <button class="btn btn-secondary btn-small" type="submit">Set password</button>
+                </form>
+              </details>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="mt-lg"{% if ue %} open{% endif %}>
+    <summary>Add a user</summary>
+    <div class="mt-md">{{ error_summary(ue, "user-") }}</div>
+    <form class="form" method="post" action="/admin/users" novalidate>
+      {{ csrf() }}
+      <div class="form-row">
+        {{ input("username", "Username", uv, ue, required=True, prefix="user-", attrs='autocomplete="off" spellcheck="false"') }}
+        {{ input("full_name", "Full name", uv, ue, required=True, prefix="user-") }}
+        {{ select("role", "Role", role_labels, uv, ue, required=True, prefix="user-") }}
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label for="f-user-employee_id">Employee record</label>
+          <p class="hint" id="h-user-employee_id">Required for polishers, so their work is tracked.</p>
+          <select id="f-user-employee_id" name="employee_id" aria-describedby="h-user-employee_id{% if ue.get('employee_id') %} e-user-employee_id{% endif %}"{% if ue.get('employee_id') %} aria-invalid="true"{% endif %}>
+            <option value="">None</option>
+            {% for e in employees if e.is_active %}<option value="{{ e.employee_id }}"{% if uv.get("employee_id") == e.employee_id|string %} selected{% endif %}>{{ e.full_name }} ({{ e.role }})</option>{% endfor %}
+          </select>
+          {% if ue.get("employee_id") %}<p class="field-error" id="e-user-employee_id">{{ ue.employee_id }}</p>{% endif %}
+        </div>
+        {{ input("password", "Password", uv, ue, type="password", required=True, prefix="user-",
+                 hint="At least 12 characters. Share it with the person privately.", attrs='autocomplete="new-password"') }}
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Add user</button></div>
+    </form>
+  </details>
+</section>
+
+{% set ee, ev = form_errors.get("employee", {}), form_values.get("employee", {}) %}
+<section class="card mt-lg" id="employees" aria-labelledby="employees-heading">
+  <h2 id="employees-heading">Employees</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Hired</th><th scope="col">Actions</th></tr></thead>
+      <tbody>
+      {% for e in employees %}
+        <tr>
+          <td>{{ e.full_name }}{% if not e.is_active %} <span class="badge badge-neutral">Inactive</span>{% endif %}</td>
+          <td>{{ e.role }}</td>
+          <td class="nowrap">{{ e.hire_date.strftime("%d %b %Y") }}</td>
+          <td>
+            <form method="post" action="/admin/employees/{{ e.employee_id }}/active">{{ csrf() }}
+              <input type="hidden" name="active" value="{{ '0' if e.is_active else '1' }}">
+              <button class="btn btn-secondary btn-small" type="submit">{{ "Deactivate" if e.is_active else "Activate" }}</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <details class="mt-lg"{% if ee %} open{% endif %}>
+    <summary>Add an employee</summary>
+    <div class="mt-md">{{ error_summary(ee, "employee-") }}</div>
+    <form class="form" method="post" action="/admin/employees" novalidate>
+      {{ csrf() }}
+      <div class="form-row">
+        {{ input("full_name", "Full name", ev, ee, required=True, prefix="employee-") }}
+        {{ input("role", "Job role", ev, ee, required=True, prefix="employee-", hint="Use Polisher for polishers.") }}
+        {{ input("hire_date", "Hire date", ev, ee, type="date", required=True, prefix="employee-") }}
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Add employee</button></div>
+    </form>
+  </details>
+</section>
+
+{% set ce, cv = form_errors.get("customer", {}), form_values.get("customer", {}) %}
+<section class="card mt-lg" id="customers" aria-labelledby="customers-heading">
+  <h2 id="customers-heading">Customers</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Phone</th></tr></thead>
+      <tbody>
+      {% for c in customers %}
+        <tr><td>{{ c.full_name }}</td><td>{{ c.email or "-" }}</td><td>{{ c.phone or "-" }}</td></tr>
+      {% else %}<tr><td class="empty" colspan="3">No customers yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <details class="mt-lg"{% if ce %} open{% endif %}>
+    <summary>Add a customer</summary>
+    <div class="mt-md">{{ error_summary(ce, "customer-") }}</div>
+    <form class="form" method="post" action="/admin/customers" novalidate>
+      {{ csrf() }}
+      <div class="form-row">
+        {{ input("full_name", "Name", cv, ce, required=True, prefix="customer-") }}
+        {{ input("email", "Email", cv, ce, type="email", prefix="customer-") }}
+        {{ input("phone", "Phone", cv, ce, type="tel", prefix="customer-") }}
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">Add customer</button></div>
+    </form>
+  </details>
+</section>
+
+{% set re_, rv = form_errors.get("rough", {}), form_values.get("rough", {}) %}
+{% set se, sv = form_errors.get("supplier", {}), form_values.get("supplier", {}) %}
+<section class="card mt-lg" id="rough" aria-labelledby="rough-heading">
+  <h2 id="rough-heading">Suppliers and rough lots</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Lot</th><th scope="col">Supplier</th><th scope="col">Received</th><th scope="col" class="num">Weight</th><th scope="col" class="num">Cost</th></tr></thead>
+      <tbody>
+      {% for r in rough_lots %}
+        <tr><td>{{ r.rough_id }}</td><td>{{ r.supplier }}</td><td class="nowrap">{{ r.received_date.strftime("%d %b %Y") }}</td>
+          <td class="num">{{ r.weight_carat }} ct</td><td class="num">{{ r.cost_usd|money }}</td></tr>
+      {% else %}<tr><td class="empty" colspan="5">No rough lots yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="grid grid-2 mt-lg">
+    <details{% if re_ %} open{% endif %}>
+      <summary>Record a rough lot</summary>
+      <div class="mt-md">{{ error_summary(re_, "rough-") }}</div>
+      <form class="form" method="post" action="/admin/rough-lots" novalidate>
+        {{ csrf() }}
+        {% set supplier_options = {} %}{% for s in suppliers %}{% set _ = supplier_options.update({s.supplier_id|string: s.name}) %}{% endfor %}
+        {{ select("supplier_id", "Supplier", supplier_options, rv, re_, required=True, prefix="rough-") }}
+        <div class="form-row">
+          {{ input("received_date", "Received", rv, re_, type="date", required=True, prefix="rough-") }}
+          {{ input("weight_carat", "Lot weight (carats)", rv, re_, required=True, prefix="rough-", attrs='inputmode="decimal"') }}
+          {{ input("cost_usd", "Cost (USD)", rv, re_, required=True, prefix="rough-", attrs='inputmode="decimal"') }}
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Record lot</button></div>
+      </form>
+    </details>
+    <details{% if se %} open{% endif %}>
+      <summary>Add a supplier</summary>
+      <div class="mt-md">{{ error_summary(se, "supplier-") }}</div>
+      <form class="form" method="post" action="/admin/suppliers" novalidate>
+        {{ csrf() }}
+        {{ input("name", "Name", sv, se, required=True, prefix="supplier-") }}
+        <div class="form-row">
+          {{ input("country", "Country", sv, se, prefix="supplier-") }}
+          {{ input("contact_email", "Contact email", sv, se, type="email", prefix="supplier-") }}
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Add supplier</button></div>
+      </form>
+    </details>
+  </div>
+</section>
+{% endblock %}

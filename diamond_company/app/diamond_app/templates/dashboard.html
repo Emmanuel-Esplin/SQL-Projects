@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "macros.html" import code_link, status_badge with context %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="muted">Where every stone is right now.</p>
+  </div>
+  {% if user.has("SAFE_KEEPER") %}
+  <a class="btn btn-primary" href="/diamonds/new">{{ icon("plus") }} Register diamond</a>
+  {% endif %}
+</div>
+
+<section aria-labelledby="stock-heading">
+  <h2 id="stock-heading" class="visually-hidden">Stock by status</h2>
+  <div class="tiles">
+    {% for status, t in tiles.items() %}
+    <a class="tile" href="/diamonds?status={{ status }}">
+      <div class="tile-label">{{ catalog.STATUSES[status] }}</div>
+      <div class="tile-value">{{ "{:,}".format(t.stones) }}</div>
+      <div class="tile-sub">{{ t.carat|carat }}{% if user.sees_prices %} · {{ t.value|money }}{% endif %}</div>
+      {% if t.unpolished %}<div class="tile-sub">{{ t.unpolished }} unpolished</div>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="out-heading">
+    <h2 id="out-heading">Out of the safe</h2>
+    {% if out %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Code</th><th scope="col">Purpose</th><th scope="col">Held by</th><th scope="col">Since</th></tr></thead>
+        <tbody>
+        {% for s in out %}
+          <tr>
+            <td>{{ code_link(s) }}</td>
+            <td>{{ catalog.PURPOSES[s.purpose] }}{% if s.is_overdue %} <span class="badge badge-overdue">Overdue</span>{% endif %}</td>
+            <td>{{ s.holder_name or "-" }}<div class="muted">released by {{ s.released_by }}</div></td>
+            <td class="nowrap">{{ s.out_since.strftime("%d %b %H:%M") }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Every stone is in the safe.</p>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="recent-heading">
+    <h2 id="recent-heading">Recent safe activity</h2>
+    {% if recent %}
+    <ul class="timeline">
+      {% for e in recent %}
+      <li>
+        <strong>{{ "Out" if e.event_type == "CHECK_OUT" else "Back in" }}</strong> ·
+        {{ code_link(e) }} · {{ catalog.PURPOSES[e.purpose] }} · <span class="num">{{ e.weight_carat|carat }}</span>
+        <div class="when">{{ e.occurred_at.strftime("%d %b %Y %H:%M") }} by {{ e.actor_name }}{% if e.holder_name %} · held by {{ e.holder_name }}{% endif %}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">No stones have left the safe yet.</p>
+    {% endif %}
+  </section>
+</div>
+
+{% if workload and user.role != "POLISHER" %}
+<section class="card mt-lg" aria-labelledby="workload-heading">
+  <h2 id="workload-heading">Polishers</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Polisher</th><th scope="col" class="num">Stones held</th><th scope="col" class="num">Jobs done</th><th scope="col" class="num">Weight removed</th></tr></thead>
+      <tbody>
+      {% for w in workload %}
+        <tr>
+          <td><a href="/polishers/{{ w.employee_id }}">{{ w.full_name }}</a></td>
+          <td class="num">{{ w.open_jobs }}</td>
+          <td class="num">{{ w.completed_jobs }}</td>
+          <td class="num">{{ w.carat_removed|carat }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

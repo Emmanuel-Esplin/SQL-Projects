@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, error_summary, input, select, radios with context %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Register diamond</h1>
+    <p class="muted">Weigh the stone first. A unique code and QR label are created when you save.</p>
+  </div>
+</div>
+
+{{ error_summary(errors) }}
+
+<form class="form" method="post" action="/diamonds" novalidate>
+  {{ csrf() }}
+
+  <fieldset>
+    <legend>Type</legend>
+    <div class="form-row">
+      {{ select("shape", "Shape", catalog.SHAPES, values, errors, required=True,
+                hint="Use Other for rough that has no shape yet.") }}
+      {{ select("origin", "Origin", catalog.ORIGINS, values, errors, required=True, blank=None) }}
+    </div>
+  </fieldset>
+
+  {{ radios("polish_state", "Polished or unpolished", catalog.POLISH_STATES, values, errors,
+            hint="Polished stones need full grades. Unpolished grades are optional estimates.") }}
+
+  <fieldset>
+    <legend>Weight</legend>
+    <div class="form-row">
+      {{ input("carat", "Weight (carats)", values, errors, type="text", required=True,
+               hint="To the hundredth of a carat, e.g. 1.25", attrs='inputmode="decimal" autocomplete="off" class="mono"') }}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Color</legend>
+    {{ radios("color_type", "Color type", catalog.COLOR_TYPES, values, errors) }}
+    <div class="form-row mt-md" data-show-when="color_type=WHITE">
+      {{ select("color_grade", "Color grade (D-Z)", catalog.COLOR_GRADES, values, errors,
+                hint="D is colorless; Z is light yellow or brown.") }}
+    </div>
+    <div class="form-row mt-md" data-show-when="color_type=FANCY">
+      {{ input("fancy_hue", "Fancy hue", values, errors, hint="e.g. Yellow, Pink, Blue, Green") }}
+      {{ select("fancy_intensity", "Fancy intensity", catalog.FANCY_INTENSITIES, values, errors) }}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Clarity and cut</legend>
+    <div class="form-row">
+      {{ select("clarity_grade", "Clarity", catalog.CLARITY_GRADES, values, errors,
+                hint="FL is flawless; I3 is heavily included.") }}
+      {{ select("cut_grade", "Cut grade", catalog.CUT_GRADES, values, errors,
+                hint="GIA grades cut for round brilliants.") }}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Price</legend>
+    <p class="hint">Enter a total price, or a price per carat to calculate it from the 4Cs. Leave both blank for unpriced rough.</p>
+    <div class="form-row mt-md">
+      {{ input("price_usd", "Total price (USD)", values, errors, attrs='inputmode="decimal" autocomplete="off"') }}
+      {{ input("base_price_per_carat", "Price per carat (USD)", values, errors, attrs='inputmode="decimal" autocomplete="off"') }}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Lineage</legend>
+    <div class="form-row">
+      <div class="field">
+        <label for="f-rough_id">Rough lot <span class="muted">(optional)</span></label>
+        <select id="f-rough_id" name="rough_id"{% if errors.get("rough_id") %} aria-invalid="true" aria-describedby="e-rough_id"{% endif %}>
+          <option value="">None (bought polished)</option>
+          {% for r in rough_lots %}
+          <option value="{{ r.rough_id }}"{% if values.get("rough_id") == r.rough_id|string %} selected{% endif %}>
+            Lot {{ r.rough_id }} · {{ r.supplier }} · {{ r.received_date }} · {{ r.weight_carat }} ct
+          </option>
+          {% endfor %}
+        </select>
+        {% if errors.get("rough_id") %}<p class="field-error" id="e-rough_id">{{ errors.rough_id }}</p>{% endif %}
+      </div>
+      {{ input("parent_code", "Cut from stone (code)", values, errors,
+               hint="If this stone came from another tracked stone.", attrs='class="mono" autocomplete="off"') }}
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{ icon("qr-code") }} Save and create label</button>
+    <a href="/diamonds">Cancel</a>
+  </div>
+</form>
+{% endblock %}

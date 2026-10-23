@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, error_summary, input, code_link, grades, status_badge with context %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Sales</h1>
+    <p class="muted">Reserve stones for customers and track them through to sold.</p>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="reserve-heading">
+    <h2 id="reserve-heading">Reserve a diamond</h2>
+    {{ error_summary(errors) }}
+    <form class="form" method="post" action="/sales/reserve" novalidate>
+      {{ csrf() }}
+      {{ input("code", "Diamond code", {"code": code}, errors, required=True,
+               hint="Only polished diamonds in stock can be reserved.", attrs='class="mono" autocomplete="off" spellcheck="false"') }}
+      {% if stone %}
+      <p class="muted">{{ code_link(stone) }} · {{ stone.shape }} · {{ stone.carat|carat }} · {{ grades(stone) }} ·
+        {{ stone.price_usd|money }} {{ status_badge(stone.status) }}</p>
+      {% endif %}
+      <div class="field">
+        <label for="f-customer_id">Customer</label>
+        <select id="f-customer_id" name="customer_id" required{% if errors.get("customer_id") %} aria-invalid="true" aria-describedby="e-customer_id"{% endif %}>
+          <option value="">Choose…</option>
+          {% for c in customers %}<option value="{{ c.customer_id }}"{% if values.get("customer_id") == c.customer_id|string %} selected{% endif %}>{{ c.full_name }}{% if c.email %} ({{ c.email }}){% endif %}</option>{% endfor %}
+        </select>
+        {% if errors.get("customer_id") %}<p class="field-error" id="e-customer_id">{{ errors.customer_id }}</p>{% endif %}
+        {% if user.has() %}<p class="hint">New customer? Add them on the <a href="/admin#customers">Admin page</a>.</p>{% endif %}
+      </div>
+      <div class="form-actions"><button class="btn btn-primary" type="submit">{{ icon("shopping-bag") }} Reserve</button></div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="pending-heading">
+    <h2 id="pending-heading">Being sold</h2>
+    {% if being_sold %}
+    <ul class="timeline">
+      {% for o in being_sold %}
+      <li>
+        Order #{{ o.order_id }} · {{ code_link(o) }} · {{ o.customer }} · {{ o.total_amount|money }}
+        <div class="when">{{ o.shape }} · {{ o.carat|carat }} · {{ grades(o) }} · reserved {{ o.order_date.strftime("%d %b %Y") }}</div>
+        <div class="form-actions mt-md">
+          {% for status, label in (("PAID", "Mark paid"), ("SHIPPED", "Mark shipped")) %}
+          <form method="post" action="/sales/orders/{{ o.order_id }}/status">{{ csrf() }}
+            <input type="hidden" name="status" value="{{ status }}">
+            <button class="btn btn-secondary btn-small" type="submit">{{ label }}</button>
+          </form>
+          {% endfor %}
+          <form method="post" action="/sales/orders/{{ o.order_id }}/status"
+                data-confirm="Cancel order #{{ o.order_id }}? {{ o.sku }} goes back into stock.">{{ csrf() }}
+            <input type="hidden" name="status" value="CANCELLED">
+            <button class="btn btn-danger btn-small" type="submit">Cancel</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">No stones are being sold.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card mt-lg" aria-labelledby="sold-heading">
+  <h2 id="sold-heading">Sold</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Order</th><th scope="col">Diamond</th><th scope="col">Customer</th><th scope="col">Status</th><th scope="col" class="num">Amount</th><th scope="col">Updated</th></tr></thead>
+      <tbody>
+      {% for o in sold %}
+        <tr>
+          <td>#{{ o.order_id }}</td>
+          <td>{{ code_link(o) }}<div class="muted">{{ o.shape }} · {{ o.carat|carat }}</div></td>
+          <td>{{ o.customer }}</td>
+          <td>{{ catalog.ORDER_STATUSES[o.status] }}</td>
+          <td class="num">{{ o.total_amount|money }}</td>
+          <td class="nowrap">{{ o.updated_at.strftime("%d %b %Y") }}</td>
+        </tr>
+      {% else %}<tr><td class="empty" colspan="6">No sales yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

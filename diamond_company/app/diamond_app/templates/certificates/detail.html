@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ cert.lab }} report {{ cert.report_number }}</h1>
+    <p class="muted">For <a class="mono" href="/diamonds/{{ cert.diamond_id }}">{{ cert.sku }}</a>
+      {% if cert.issue_date %} · issued {{ cert.issue_date.strftime("%d %b %Y") }}{% endif %}
+      · uploaded {{ cert.uploaded_at.strftime("%d %b %Y") }} by {{ cert.uploaded_by_name }}</p>
+  </div>
+  <a class="btn btn-secondary" href="/certificates/{{ cert.certificate_id }}/file?download=1">Download</a>
+</div>
+
+{% if cert.mime_type == "application/pdf" %}
+<iframe class="cert-preview" src="/certificates/{{ cert.certificate_id }}/file" title="Certificate {{ cert.report_number }}"></iframe>
+{% else %}
+<img class="cert-preview" src="/certificates/{{ cert.certificate_id }}/file" alt="Scan of {{ cert.lab }} report {{ cert.report_number }}">
+{% endif %}
+<p class="hint mt-md">File fingerprint (SHA-256): <span class="mono">{{ cert.sha256 }}</span></p>
+{% endblock %}

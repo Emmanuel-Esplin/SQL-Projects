@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, error_summary, input, code_link with context %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Repairs</h1>
+    <p class="muted">Stones sent out for repair, and who has them.</p>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="send-heading">
+    <h2 id="send-heading">Send a stone for repair</h2>
+    {{ error_summary(errors) }}
+    <form class="form" method="post" action="/safe/check-out" novalidate>
+      {{ csrf() }}
+      <input type="hidden" name="purpose" value="REPAIR">
+      <input type="hidden" name="return_to" value="/repairs">
+      {{ input("code", "Stone code", {"code": code}, errors, required=True,
+               hint="Scan the QR label or type the code.", attrs='class="mono" autocomplete="off" spellcheck="false"') }}
+      <div class="field">
+        <label for="f-holder_employee_id">Repaired by</label>
+        <select id="f-holder_employee_id" name="holder_employee_id" required{% if errors.get("holder_employee_id") %} aria-invalid="true" aria-describedby="e-holder_employee_id"{% endif %}>
+          <option value="">Choose…</option>
+          {% for e in employees %}<option value="{{ e.employee_id }}"{% if values.get("holder_employee_id") == e.employee_id|string %} selected{% endif %}>{{ e.full_name }} ({{ e.role }})</option>{% endfor %}
+        </select>
+        {% if errors.get("holder_employee_id") %}<p class="field-error" id="e-holder_employee_id">{{ errors.holder_employee_id }}</p>{% endif %}
+      </div>
+      {{ input("weight_carat", "Weight on the scale (carats)", values, errors, required=True,
+               attrs='inputmode="decimal" autocomplete="off" class="mono"') }}
+      {{ input("notes", "What needs repairing", values, errors, hint="e.g. chipped girdle, re-polish table facet") }}
+      <div class="form-actions"><button class="btn btn-primary" type="submit">{{ icon("wrench") }} Send for repair</button></div>
+    </form>
+    <p class="hint mt-md">To take a stone back after repair, find it on the <a href="/safe">Safe</a> page.</p>
+  </section>
+
+  <section class="card" aria-labelledby="inrepair-heading">
+    <h2 id="inrepair-heading">In repair now</h2>
+    {% if in_repair %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Code</th><th scope="col">Repaired by</th><th scope="col">Since</th><th scope="col"></th></tr></thead>
+        <tbody>
+        {% for s in in_repair %}
+          <tr>
+            <td>{{ code_link(s) }}{% if s.is_overdue %} <span class="badge badge-overdue">Overdue</span>{% endif %}</td>
+            <td>{{ s.holder_name }}</td>
+            <td class="nowrap">{{ s.out_since.strftime("%d %b %Y") }}</td>
+            <td><a href="/safe?code={{ s.sku }}">Take back</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="muted">No stones are in repair.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card mt-lg" aria-labelledby="history-heading">
+  <h2 id="history-heading">Completed repairs</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Code</th><th scope="col">Repaired by</th><th scope="col">Dates</th><th scope="col" class="num">Out</th><th scope="col" class="num">Back</th><th scope="col" class="num">Removed</th></tr></thead>
+      <tbody>
+      {% for w in history %}
+        <tr>
+          <td><a class="mono" href="/diamonds/{{ w.diamond_id }}">{{ w.sku }}</a></td>
+          <td>{{ w.employee_name }}</td>
+          <td class="nowrap">{{ w.start_date.strftime("%d %b") }} – {{ w.end_date.strftime("%d %b %Y") }}</td>
+          <td class="num">{{ w.weight_out|carat }}</td>
+          <td class="num">{{ w.weight_in|carat }}</td>
+          <td class="num">{{ w.weight_removed|carat }}</td>
+        </tr>
+      {% else %}<tr><td class="empty" colspan="6">No completed repairs yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

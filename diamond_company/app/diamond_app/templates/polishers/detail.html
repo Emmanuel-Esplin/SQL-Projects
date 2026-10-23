@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "macros.html" import code_link with context %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ employee.full_name }}</h1>
+    <p class="muted">{{ employee.role }} · since {{ employee.hire_date.strftime("%d %b %Y") }}</p>
+  </div>
+</div>
+
+{% if totals %}
+<div class="tiles">
+  <div class="tile"><div class="tile-label">Stones held now</div><div class="tile-value">{{ holding|length }}</div></div>
+  <div class="tile"><div class="tile-label">Jobs done</div><div class="tile-value">{{ totals.completed_jobs }}</div></div>
+  <div class="tile"><div class="tile-label">Weight removed</div><div class="tile-value">{{ totals.carat_removed|carat }}</div></div>
+</div>
+{% endif %}
+
+<section class="card" aria-labelledby="holding-heading">
+  <h2 id="holding-heading">Holding now</h2>
+  {% if holding %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Code</th><th scope="col">Purpose</th><th scope="col">Since</th><th scope="col">Released by</th><th scope="col" class="num">Out weight</th></tr></thead>
+      <tbody>
+      {% for s in holding %}
+        <tr>
+          <td>{{ code_link(s) }}{% if s.is_overdue %} <span class="badge badge-overdue">Overdue</span>{% endif %}</td>
+          <td>{{ catalog.PURPOSES[s.purpose] }}</td>
+          <td class="nowrap">{{ s.out_since.strftime("%d %b %Y %H:%M") }}</td>
+          <td>{{ s.released_by }}</td>
+          <td class="num">{{ s.weight_out|carat }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="muted">Not holding any stones.</p>{% endif %}
+</section>
+
+<section class="card mt-lg" aria-labelledby="jobs-heading">
+  <h2 id="jobs-heading">Job history</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Stone</th><th scope="col">Job</th><th scope="col">Dates</th><th scope="col">Taken from safe by</th><th scope="col">Returned by</th><th scope="col" class="num">Out</th><th scope="col" class="num">Back</th><th scope="col" class="num">Removed</th></tr></thead>
+      <tbody>
+      {% for w in jobs %}
+        <tr>
+          <td>{% if w.diamond_id %}<a class="mono" href="/diamonds/{{ w.diamond_id }}">{{ w.sku }}</a>{% else %}-{% endif %}</td>
+          <td>{{ w.work_type|capitalize }} · {{ w.status|replace("_", " ")|capitalize }}</td>
+          <td class="nowrap">{{ w.start_date.strftime("%d %b %Y") }}{% if w.end_date %} – {{ w.end_date.strftime("%d %b %Y") }}{% endif %}</td>
+          <td>{{ w.released_by or "-" }}</td>
+          <td>{{ w.returned_by or "-" }}</td>
+          <td class="num">{{ w.weight_out|carat }}</td>
+          <td class="num">{{ w.weight_in|carat }}</td>
+          <td class="num">{{ w.weight_removed|carat }}</td>
+        </tr>
+      {% else %}<tr><td class="empty" colspan="8">No jobs yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

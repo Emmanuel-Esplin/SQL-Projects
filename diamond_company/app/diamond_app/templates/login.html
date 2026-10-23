@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, error_summary with context %}
+{% block title %}Log in{% endblock %}
+{% block body %}
+<main class="login-page" id="main">
+  <div class="card login-card">
+    <span class="brand">{{ icon("gem") }} Diamond Tracker</span>
+    <h1>Log in</h1>
+    {{ error_summary(errors) }}
+    <form class="form" method="post" action="/login">
+      {{ csrf() }}
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field">
+        <label for="f-username">Username</label>
+        <input id="f-username" name="username" type="text" autocomplete="username" required
+               value="{{ values.get('username', '') }}" data-autofocus>
+      </div>
+      <div class="field">
+        <label for="f-password">Password</label>
+        <input id="f-password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary" type="submit">Log in</button>
+    </form>
+  </div>
+</main>
+{% endblock %}

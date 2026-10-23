@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, status_badge, polish_badge, code_link with context %}
+
+{% macro tree(node, current_id) -%}
+  <li>
+    {% if node.diamond_id == current_id %}<span class="mono current" aria-current="true">{{ node.sku }}</span> (this stone)
+    {% else %}<a class="mono" href="/diamonds/{{ node.diamond_id }}">{{ node.sku }}</a>{% endif %}
+    · {{ node.shape }} · {{ node.carat|carat }} · {{ catalog.POLISH_STATES[node.polish_state] }} · {{ catalog.STATUSES[node.status] }}
+    {% if node.children %}<ul>{% for child in node.children %}{{ tree(child, current_id) }}{% endfor %}</ul>{% endif %}
+  </li>
+{%- endmacro %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="mono">{{ d.sku }}</h1>
+    <p>{{ status_badge(d.status) }} {{ polish_badge(d.polish_state) }}
+      {% if out %}<span class="badge badge-overdue">Out of safe: {{ catalog.PURPOSES[out.purpose] }}</span>{% endif %}
+      {% if d.certified %}<span class="badge badge-neutral">Certified</span>{% endif %}</p>
+  </div>
+  <div class="form-actions">
+    <a class="btn btn-secondary" href="/diamonds/{{ d.diamond_id }}/label">{{ icon("printer") }} Print label</a>
+    {% if user.has("SAFE_KEEPER") and d.status not in ("SOLD", "SPLIT") %}
+      <a class="btn btn-primary" href="/safe?code={{ d.sku }}">{{ icon("vault") }} {{ "Check in" if out else "Check out" }}</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="facts-heading">
+    <h2 id="facts-heading">The 4Cs</h2>
+    <dl class="facts">
+      <dt>Type</dt><dd>{{ d.shape }} · {{ catalog.ORIGINS[d.origin] }} · {{ catalog.COLOR_TYPES[d.color_type] }}</dd>
+      <dt>Carat</dt><dd class="mono">{{ d.carat|carat }}{% if d.carat_band %} <span class="muted">({{ d.carat_band }})</span>{% endif %}</dd>
+      <dt>Color</dt>
+      <dd>{{ color_label(d) }}{% if d.color_category %} <span class="muted">({{ d.color_category }})</span>{% endif %}</dd>
+      <dt>Clarity</dt>
+      <dd>{{ d.clarity_grade or "Not graded" }}{% if d.clarity_category %} <span class="muted">({{ d.clarity_category }})</span>{% endif %}</dd>
+      <dt>Cut</dt><dd>{{ d.cut_grade or "Not graded" }}</dd>
+      {% if d.depth_pct or d.table_pct %}<dt>Proportions</dt><dd>Depth {{ d.depth_pct or "-" }}% · Table {{ d.table_pct or "-" }}%</dd>{% endif %}
+      {% if d.length_mm %}<dt>Measurements</dt><dd class="mono">{{ d.length_mm }} × {{ d.width_mm }} × {{ d.depth_mm }} mm</dd>{% endif %}
+      {% if user.sees_prices %}
+      <dt>Price</dt><dd class="mono">{{ d.price_usd|money }} <span class="muted">({{ d.price_per_carat|money }}/ct)</span></dd>
+      {% endif %}
+      <dt>Registered</dt><dd>{{ d.created_at.strftime("%d %b %Y %H:%M") }}</dd>
+    </dl>
+
+    {% if user.has("SAFE_KEEPER", "SALES") and d.status not in ("SOLD", "SPLIT") %}
+    <details class="mt-lg">
+      <summary>Change price</summary>
+      <form class="form mt-md" method="post" action="/diamonds/{{ d.diamond_id }}/price">
+        {{ csrf() }}
+        <div class="field">
+          <label for="f-price_usd">New total price (USD)</label>
+          <input id="f-price_usd" name="price_usd" type="text" inputmode="decimal" autocomplete="off" required>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" type="submit">Save price</button>
+        </div>
+      </form>
+      <form class="mt-md" method="post" action="/diamonds/{{ d.diamond_id }}/price">
+        {{ csrf() }}
+        <input type="hidden" name="recompute" value="1">
+        <button class="btn-link" type="submit">Recalculate from the 4Cs and price per carat ({{ d.base_price_per_carat|money }})</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="qr-heading">
+    <h2 id="qr-heading">Tracking code</h2>
+    <div class="form-actions">
+      <img class="qr" src="/diamonds/{{ d.diamond_id }}/qr.svg" alt="QR code for {{ d.sku }}">
+      <div>
+        <p class="mono">{{ d.sku }}</p>
+        <p class="hint">Scanning opens <span class="mono">{{ qr_target }}</span></p>
+      </div>
+    </div>
+    {% if out %}
+    <div class="alert alert-info mt-md">
+      <p><strong>Out of the safe for {{ catalog.PURPOSES[out.purpose]|lower }}</strong> since {{ out.out_since.strftime("%d %b %Y %H:%M") }}.
+        Released by {{ out.released_by }}{% if out.holder_name %}, held by {{ out.holder_name }}{% endif %}. Weighed {{ out.weight_out|carat }} on release.</p>
+    </div>
+    {% else %}
+    <p class="muted mt-md">In the safe.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card mt-lg" aria-labelledby="lineage-heading">
+  <h2 id="lineage-heading">{{ icon("git-branch") }} Lineage</h2>
+  {% if rough_lot %}
+  <p>From rough lot {{ rough_lot.rough_id }}: {{ rough_lot.weight_carat }} ct from {{ rough_lot.supplier }}{% if rough_lot.country %} ({{ rough_lot.country }}){% endif %}, received {{ rough_lot.received_date.strftime("%d %b %Y") }}.</p>
+  {% endif %}
+  {% if lineage.children or lineage.diamond_id != d.diamond_id %}
+    <ul class="tree">{{ tree(lineage, d.diamond_id) }}</ul>
+  {% else %}
+    <p class="muted">No parent or child stones.</p>
+  {% endif %}
+  {% if user.has("SAFE_KEEPER") and d.polish_state == "UNPOLISHED" and d.status == "AVAILABLE" and not out %}
+  <details class="mt-md">
+    <summary>Split into pieces</summary>
+    <form class="form mt-md" method="post" action="/diamonds/{{ d.diamond_id }}/split"
+          data-confirm="Split {{ d.sku }}? The parent is retired and each piece gets a new code.">
+      {{ csrf() }}
+      <div class="field">
+        <label for="f-child_weights">Weight of each piece (carats)</label>
+        <p class="hint" id="h-child_weights">Separate with commas, e.g. 1.20, 0.85. Total cannot exceed {{ d.carat|carat }}.</p>
+        <input id="f-child_weights" name="child_weights" type="text" class="mono" required aria-describedby="h-child_weights" autocomplete="off">
+      </div>
+      <div class="form-actions"><button class="btn btn-secondary" type="submit">Split stone</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<div class="grid grid-2 mt-lg">
+  <section class="card" aria-labelledby="custody-heading">
+    <h2 id="custody-heading">{{ icon("vault") }} Safe history</h2>
+    {% if custody %}
+    <ul class="timeline">
+      {% for e in custody %}
+      <li>
+        <strong>{{ "Taken out" if e.event_type == "CHECK_OUT" else "Put back" }}</strong> for {{ catalog.PURPOSES[e.purpose]|lower }}
+        · <span class="mono">{{ e.weight_carat|carat }}</span>
+        <div class="when">{{ e.occurred_at.strftime("%d %b %Y %H:%M") }} by {{ e.actor_name }}{% if e.holder_name %} · held by {{ e.holder_name }}{% endif %}</div>
+        {% if e.notes %}<div class="muted">{{ e.notes }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Has not left the safe.</p>{% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="weights-heading">
+    <h2 id="weights-heading">{{ icon("scale") }} Weight history</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">When</th><th scope="col">Reason</th><th scope="col">State</th><th scope="col" class="num">Weight</th></tr></thead>
+        <tbody>
+        {% for w in weights %}
+          <tr>
+            <td class="nowrap">{{ w.recorded_at.strftime("%d %b %Y") }}<div class="muted">{{ w.recorded_by_name or "System" }}</div></td>
+            <td>{{ w.reason|replace("_", " ")|capitalize }}</td>
+            <td>{{ catalog.POLISH_STATES[w.polish_state] }}</td>
+            <td class="num">{{ w.weight_carat|carat }}</td>
+          </tr>
+        {% else %}<tr><td class="empty" colspan="4">No weighings recorded.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="card mt-lg" aria-labelledby="work-heading">
+  <h2 id="work-heading">{{ icon("hammer") }} Polishing and repairs</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Job</th><th scope="col">Worked on by</th><th scope="col">Dates</th><th scope="col" class="num">Out</th><th scope="col" class="num">Back</th><th scope="col" class="num">Removed</th><th scope="col">Status</th></tr></thead>
+      <tbody>
+      {% for w in work_orders %}
+        <tr>
+          <td>{{ w.work_type|capitalize }} #{{ w.work_order_id }}</td>
+          <td><a href="/polishers/{{ w.employee_id }}">{{ w.employee_name }}</a></td>
+          <td class="nowrap">{{ w.start_date.strftime("%d %b %Y") }}{% if w.end_date %} – {{ w.end_date.strftime("%d %b %Y") }}{% endif %}</td>
+          <td class="num">{{ w.weight_out|carat }}</td>
+          <td class="num">{{ w.weight_in|carat }}</td>
+          <td class="num">{{ w.weight_removed|carat }}</td>
+          <td>{{ w.status|replace("_", " ")|capitalize }}</td>
+        </tr>
+      {% else %}<tr><td class="empty" colspan="7">No polishing or repair jobs.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="grid grid-2 mt-lg">
+  <section class="card" aria-labelledby="cert-heading">
+    <h2 id="cert-heading">{{ icon("file-badge") }} Certificates</h2>
+    {% if certificates %}
+    <ul class="timeline">
+      {% for c in certificates %}
+      <li>
+        <a href="/certificates/{{ c.certificate_id }}">{{ c.lab }} report {{ c.report_number }}</a>
+        {% if c.issue_date %} · issued {{ c.issue_date.strftime("%d %b %Y") }}{% endif %}
+        <div class="when">Uploaded {{ c.uploaded_at.strftime("%d %b %Y") }} by {{ c.uploaded_by_name }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">No certificate on file.</p>{% endif %}
+
+    {% if user.has("SAFE_KEEPER") %}
+      {% if d.polish_state == "POLISHED" %}
+      <details class="mt-md"{% if errors %} open{% endif %}>
+        <summary>Upload a certificate</summary>
+        <form class="form mt-md" method="post" action="/diamonds/{{ d.diamond_id }}/certificates" enctype="multipart/form-data">
+          {{ csrf() }}
+          <div class="form-row">
+            <div class="field">
+              <label for="f-lab">Laboratory</label>
+              <select id="f-lab" name="lab">{% for lab in catalog.CERT_LABS %}<option>{{ lab }}</option>{% endfor %}</select>
+            </div>
+            <div class="field">
+              <label for="f-report_number">Report number</label>
+              <input id="f-report_number" name="report_number" type="text" class="mono" required autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="f-issue_date">Issue date <span class="muted">(optional)</span></label>
+              <input id="f-issue_date" name="issue_date" type="date">
+            </div>
+          </div>
+          <div class="field">
+            <label for="f-file">Certificate file</label>
+            <p class="hint" id="h-file">PDF, JPEG or PNG, up to 10 MB.</p>
+            <input id="f-file" name="file" type="file" accept="application/pdf,image/jpeg,image/png" required aria-describedby="h-file">
+          </div>
+          <div class="form-actions"><button class="btn btn-primary" type="submit">Upload certificate</button></div>
+        </form>
+      </details>
+      {% else %}
+      <p class="hint mt-md">Certificates can be added once the stone is polished.</p>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="sales-heading">
+    <h2 id="sales-heading">{{ icon("shopping-bag") }} Sales</h2>
+    {% if orders %}
+    <ul class="timeline">
+      {% for o in orders %}
+      <li>Order #{{ o.order_id }} · {{ o.customer }} · {{ catalog.ORDER_STATUSES[o.status] }}
+        {% if user.sees_prices %} · {{ o.price_at_sale|money }}{% endif %}
+        <div class="when">{{ o.order_date.strftime("%d %b %Y") }}</div></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Not on any order.</p>{% endif %}
+    {% if user.has("SALES") and d.status == "AVAILABLE" and d.polish_state == "POLISHED" %}
+      <p class="mt-md"><a class="btn btn-secondary" href="/sales?code={{ d.sku }}">Reserve for a customer</a></p>
+    {% endif %}
+  </section>
+</div>
+
+{% if user.has() and audit %}
+<section class="card mt-lg" aria-labelledby="audit-heading">
+  <h2 id="audit-heading">Audit log</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">When</th><th scope="col">Who</th><th scope="col">Change</th></tr></thead>
+      <tbody>
+      {% for a in audit %}
+        <tr><td class="nowrap">{{ a.changed_at.strftime("%d %b %Y %H:%M") }}</td><td>{{ a.changed_by }}</td><td><code>{{ a.payload }}</code></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

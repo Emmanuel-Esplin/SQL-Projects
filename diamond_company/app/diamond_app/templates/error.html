@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block body %}
+{% if user %}{{ super() }}{% else %}
+<main class="login-page" id="main">
+  <div class="card login-card">
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    <p><a href="/">Go to the dashboard</a></p>
+  </div>
+</main>
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ title }}</h1>
+  <p>{{ message }}</p>
+  <p><a href="/">Go to the dashboard</a></p>
+</div>
+{% endblock %}
