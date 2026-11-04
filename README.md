@@ -7,8 +7,8 @@ This repository hosts **SQL scripts and exercises** for learning and practicing 
 
 | Folder | Engine | Description |
 |---|---|---|
-| [diamond_company/](diamond_company/) | MySQL 8.0+ | Diamond business database graded on the GIA 4Cs: procedures, triggers, views, CSV import |
-| [financial_ledger/](financial_ledger/) | MySQL 8.0+ | General ledger with `staging` → `core` → `mart` layers |
+| [diamond_company/](diamond_company/) | MySQL 8.0+, FastAPI | Diamond business database graded on the GIA 4Cs (procedures, triggers, views, CSV import), plus Diamond Tracker, a local web app with QR labels, roles and an insert-only custody ledger |
+| [financial_ledger/](financial_ledger/) | MySQL 8.0+ | General ledger with `staging` and `core` layers, and a `mart` schema reserved for reporting |
 | [mysql_exercises/](mysql_exercises/) | MySQL | Query exercises on the `my_guitar_shop` sample database |
 | [postgresql_exercises/](postgresql_exercises/) | PostgreSQL | Data types, `COPY` import/export, and the US counties dataset |
 
@@ -25,4 +25,4 @@ This repository hosts **SQL scripts and exercises** for learning and practicing 
 2. Follow the README in each project folder.
 
 ## GitHub Profile
-https://github.com/Emmanuel-Esplin/SQL-Projects
+https://github.com/Emmanuel-Esplin
