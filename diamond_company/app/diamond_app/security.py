@@ -23,6 +23,8 @@ ROLES = (ADMIN, SAFE_KEEPER, POLISHER, SALES)
 ROLE_LABELS = {ADMIN: "Admin", SAFE_KEEPER: "Safe keeper", POLISHER: "Polisher", SALES: "Sales"}
 MIN_PASSWORD_LENGTH = 12
 MAX_PASSWORD_LENGTH = 128
+PASSWORD_RULES = (f"Use {MIN_PASSWORD_LENGTH}-{MAX_PASSWORD_LENGTH} characters, not a common password, and not "
+                  "containing the username. A phrase of unrelated words works well.")
 
 security_log = logging.getLogger("diamond_app.security")
 
@@ -34,12 +36,14 @@ _DUMMY_HASH = _hasher.hash(secrets.token_urlsafe(16))
 
 def log_value(value: object, limit: int = 64) -> str:
     """Make user-supplied text safe to log: printable, one line, short."""
-    return "".join(c if c.isprintable() else "?" for c in str(value))[:limit]
+    text = str(value).replace("\r", "?").replace("\n", "?")  # no forged log lines
+    return "".join(c if c.isprintable() else "?" for c in text)[:limit]
 
 
 # ---------------------------------------------------------------------------
 # Passwords (NIST SP 800-63B: length over complexity, block known-bad choices)
 # ---------------------------------------------------------------------------
+# Well-known weak passwords, not secrets (gitleaks:allow marks them for the secret scanner)
 _COMMON_PASSWORDS = frozenset({
     "000000000000", "111111111111", "123123123123", "123456789012", "1234567890123", "12345678901234",  # gitleaks:allow
     "abc123456789", "abcdefghijkl", "adminadmin123", "administrator", "changeme1234", "football1234",  # gitleaks:allow
@@ -271,7 +275,7 @@ def require_roles(*roles: str) -> Callable[..., CurrentUser]:
 
     def checker(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if not user.has(*roles):
-            security_log.warning("forbidden user=%s role=%s", log_value(user.username), user.role)
+            security_log.warning("forbidden user=%s role=%s", log_value(user.username), log_value(user.role))
             raise HTTPException(status_code=403, detail="Your role does not allow this action.")
         return user
 

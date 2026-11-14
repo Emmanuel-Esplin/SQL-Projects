@@ -92,7 +92,8 @@ def create_user(request: Request, username: str = Form(""), full_name: str = For
         except IntegrityError:
             errors["username"] = "That username, or that employee's login, already exists."
         else:
-            security_log.info("user created username=%s role=%s by=%s", log_value(username), role, user.username)
+            security_log.info("user created username=%s role=%s by=%s", log_value(username), log_value(role),
+                              log_value(user.username))
     if errors:
         return _failed(request, user, "user", errors,
                        {"username": username, "full_name": full_name, "role": role, "employee_id": employee_id})
@@ -108,8 +109,8 @@ def toggle_user(request: Request, user_id: int, active: str = Form(""), user: Cu
     with connect(user.username) as conn:
         conn.execute(text("UPDATE APP_USERS SET is_active = :a WHERE user_id = :id"),
                      {"a": active == "1", "id": user_id})
-    security_log.info("user %s user_id=%s by=%s", "activated" if active == "1" else "deactivated", user_id,
-                      user.username)
+    security_log.info("user %s user_id=%s by=%s", "activated" if active == "1" else "deactivated",
+                      log_value(user_id), log_value(user.username))
     flash(request, "User activated." if active == "1" else "User deactivated. They are logged out immediately.")
     return RedirectResponse("/admin", status_code=303)
 
@@ -127,7 +128,7 @@ def reset_password(request: Request, user_id: int, password: str = Form(""), use
             return RedirectResponse("/admin", status_code=303)
         new_hash = hash_password(password)
         conn.execute(text("UPDATE APP_USERS SET password_hash = :h WHERE user_id = :id"), {"h": new_hash, "id": user_id})
-    security_log.info("password reset user_id=%s by=%s", user_id, user.username)
+    security_log.info("password reset user_id=%s by=%s", log_value(user_id), log_value(user.username))
     if user_id == user.user_id:
         refresh_session_auth(request, new_hash)
         flash(request, "Your password was changed. Other sessions of yours were logged out.")

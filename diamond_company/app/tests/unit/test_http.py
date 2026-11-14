@@ -58,8 +58,8 @@ def test_static_files_are_cached_only_when_versioned(client):
 
 def test_pages_have_no_inline_scripts_or_styles(client):
     html = client.get("/login").text
-    assert "style=" not in html
-    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html)
+    assert not re.search(r"\sstyle\s*=", html, re.IGNORECASE)
+    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html, re.IGNORECASE)
     assert re.search(r'<script src="/static/js/app\.js\?v=\w+">', html)
 
 

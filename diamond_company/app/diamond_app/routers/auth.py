@@ -35,7 +35,8 @@ def safe_next(target: str) -> str:
     parts = urlsplit(target)
     if parts.scheme or parts.netloc or target.startswith("//"):
         return "/"
-    return target
+    # Rebuilt from a constant "/" so the result can only ever be a path here
+    return "/" + target.lstrip("/")
 
 
 @router.get("/login")
@@ -51,7 +52,7 @@ def login(request: Request, username: str = Form(""), password: str = Form(""), 
     target = safe_next(next)
     address = client_address(request)
     if login_locked(username, address):
-        security_log.warning("login refused (locked) user=%s ip=%s", log_value(username), address)
+        security_log.warning("login refused (locked) user=%s ip=%s", log_value(username), log_value(address))
         return render(request, "login.html", status_code=429, title="Log in", next=target,
                       values={"username": username},
                       errors={"_form": f"Too many failed attempts. Wait {LOCKOUT_MINUTES} minutes, "
@@ -60,13 +61,13 @@ def login(request: Request, username: str = Form(""), password: str = Form(""), 
     user = authenticate(username, password) if valid_input else None
     if not user:
         record_login_failure(username, address)
-        security_log.warning("login failed user=%s ip=%s", log_value(username), address)
+        security_log.warning("login failed user=%s ip=%s", log_value(username), log_value(address))
         return render(request, "login.html", status_code=401, title="Log in", next=target,
                       values={"username": username},
                       errors={"_form": "The username or password is incorrect."})
     clear_login_failures(username)
     start_session(request, user)
-    security_log.info("login ok user_id=%s ip=%s", user["user_id"], address)
+    security_log.info("login ok user_id=%s ip=%s", log_value(user["user_id"]), log_value(address))
     return RedirectResponse(target, status_code=303)
 
 
