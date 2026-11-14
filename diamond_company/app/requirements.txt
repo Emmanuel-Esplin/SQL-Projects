@@ -1,3 +1,5 @@
+# Runtime dependencies, pinned. Dependabot proposes upgrades; CI runs
+# pip-audit against this file on every push and weekly.
 argon2-cffi==25.1.0
 cryptography==50.0.2
 fastapi==0.161.1
@@ -10,7 +12,3 @@ python-multipart==0.0.32
 qrcode==8.2
 SQLAlchemy==2.1.6
 uvicorn==0.54.0
-
-# Tests
-httpx==0.28.1
-pytest==9.1.1

@@ -46,10 +46,11 @@ def list_diamonds(request: Request, page: int = 1, q: str = "", user: CurrentUse
     page = max(page, 1)
 
     with connect(user.username) as conn:
-        total = conn.execute(text("SELECT COUNT(*) FROM v_diamond_4c v" + clause), params).scalar_one()
+        # clause holds only allowlisted column names; every value is a bound parameter
+        total = conn.execute(text("SELECT COUNT(*) FROM v_diamond_4c v" + clause), params).scalar_one()  # noqa: S608
         rows = fetch_all(
             conn,
-            "SELECT v.* FROM v_diamond_4c v" + clause + " ORDER BY v.diamond_id DESC LIMIT :limit OFFSET :offset",
+            "SELECT v.* FROM v_diamond_4c v" + clause + " ORDER BY v.diamond_id DESC LIMIT :limit OFFSET :offset",  # noqa: S608
             **params, limit=PAGE_SIZE, offset=(page - 1) * PAGE_SIZE,
         )
 

@@ -1,47 +1,37 @@
-"""Test fixtures.
+"""Integration fixtures.
 
-The tests deploy sql/0*.sql, which DROPS and recreates Diamond_company.
+These tests deploy sql/0*.sql, which DROPS and recreates Diamond_company.
 Point them only at a throwaway MySQL server, and opt in explicitly:
 
     DT_TEST_DB_HOST=127.0.0.1 DT_TEST_DB_PORT=33999 DT_TEST_DB_USER=root \
-    DT_TEST_ALLOW_RESET=1 .venv/bin/pytest
+    DT_TEST_ALLOW_RESET=1 .venv/bin/pytest tests/integration
+
+The app's DT_* settings come from DT_TEST_DB_* in ../conftest.py.
 """
 
 import os
 import re
-import secrets
+import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 import pytest
 
-SQL_DIR = Path(__file__).resolve().parents[2] / "sql"
+SQL_DIR = Path(__file__).resolve().parents[3] / "sql"
 PASSWORD = "correct-horse-battery-staple"
 
 if os.environ.get("DT_TEST_ALLOW_RESET") != "1":
     pytest.skip("Set DT_TEST_ALLOW_RESET=1 and point DT_TEST_DB_* at a throwaway MySQL server",
                 allow_module_level=True)
 
-DB = {
-    "host": os.environ.get("DT_TEST_DB_HOST", "127.0.0.1"),
-    "port": os.environ.get("DT_TEST_DB_PORT", "3306"),
-    "user": os.environ.get("DT_TEST_DB_USER", "root"),
-    "password": os.environ.get("DT_TEST_DB_PASSWORD", ""),
-}
-
-# Configure the app before it is imported
-os.environ.update(
-    DT_DB_HOST=DB["host"], DT_DB_PORT=DB["port"], DT_DB_USER=DB["user"], DT_DB_PASSWORD=DB["password"],
-    DT_DB_NAME="Diamond_company", DT_SESSION_SECRET=secrets.token_urlsafe(48),
-    DT_STORAGE_DIR=tempfile.mkdtemp(prefix="dt-storage-"), DT_BASE_URL="http://testserver",
-)
+DB = {key: os.environ[f"DT_DB_{key.upper()}"] for key in ("host", "port", "user", "password")}
+MYSQL = shutil.which("mysql") or "mysql"
 
 
 def _mysql(sql_file: Path) -> None:
     env = {**os.environ, "MYSQL_PWD": DB["password"]}
     with sql_file.open("rb") as handle:
-        subprocess.run(["mysql", "-h", DB["host"], "-P", DB["port"], "-u", DB["user"]],
+        subprocess.run([MYSQL, "-h", DB["host"], "-P", DB["port"], "-u", DB["user"]],
                        stdin=handle, env=env, check=True, capture_output=True)
 
 
@@ -63,6 +53,16 @@ def database():
                               "VALUES (:u, :n, :h, :r, :e)"),
                          {"u": username, "n": username.title(), "h": hashed, "r": role, "e": employee})
     yield
+
+
+@pytest.fixture(autouse=True)
+def reset_login_throttle():
+    """Failed logins in one test must not lock accounts in the next."""
+    from diamond_app import security
+
+    yield
+    security._by_username._hits.clear()
+    security._by_address._hits.clear()
 
 
 CSRF_RE = re.compile(r'name="csrf_token" value="([^"]+)"')

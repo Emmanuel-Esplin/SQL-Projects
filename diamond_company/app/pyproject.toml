@@ -1,9 +1,40 @@
 [project]
 name = "diamond-tracker"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local web app for the Diamond Company database"
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = ["--strict-markers", "-p", "no:cacheprovider"]
+filterwarnings = [
+    "error::DeprecationWarning:diamond_app.*",
+    # Starlette's TestClient nudges towards httpx2; harmless for tests
+    "ignore:Using `httpx` with `starlette.testclient`:DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["diamond_app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if __name__ == .__main__.:"]
+
+[tool.ruff]
+line-length = 130  # matches the existing code
+target-version = "py312"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, bugbear, pyupgrade, bandit security, blind except
+select = ["E", "W", "F", "I", "B", "UP", "S", "BLE"]
+ignore = [
+    "B008",  # FastAPI's Depends()/Form() in defaults is the intended pattern
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S603", "S607"]  # asserts, test passwords, mysql CLI in fixtures
+"scripts/**" = ["S603", "S607"]
