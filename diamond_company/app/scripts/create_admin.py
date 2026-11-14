@@ -17,7 +17,7 @@ from sqlalchemy import text  # noqa: E402
 from sqlalchemy.exc import IntegrityError  # noqa: E402
 
 from diamond_app.db import connect  # noqa: E402
-from diamond_app.security import PASSWORD_RULES, hash_password, password_problem  # noqa: E402
+from diamond_app.security import STRENGTH_RULES, hash_password, password_problem  # noqa: E402
 
 
 def main() -> int:
@@ -28,7 +28,7 @@ def main() -> int:
         return 1
     password = getpass.getpass("Password (at least 12 characters): ")
     if password_problem(password, username):
-        print(f"Password not accepted. {PASSWORD_RULES}")
+        print(f"Password not accepted. {STRENGTH_RULES}")
         return 1
     if getpass.getpass("Repeat password: ") != password:
         print("The passwords do not match.")

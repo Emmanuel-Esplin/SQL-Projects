@@ -23,7 +23,7 @@ ROLES = (ADMIN, SAFE_KEEPER, POLISHER, SALES)
 ROLE_LABELS = {ADMIN: "Admin", SAFE_KEEPER: "Safe keeper", POLISHER: "Polisher", SALES: "Sales"}
 MIN_PASSWORD_LENGTH = 12
 MAX_PASSWORD_LENGTH = 128
-PASSWORD_RULES = (f"Use {MIN_PASSWORD_LENGTH}-{MAX_PASSWORD_LENGTH} characters, not a common password, and not "
+STRENGTH_RULES = (f"Use {MIN_PASSWORD_LENGTH}-{MAX_PASSWORD_LENGTH} characters, not a common password, and not "
                   "containing the username. A phrase of unrelated words works well.")
 
 security_log = logging.getLogger("diamond_app.security")
