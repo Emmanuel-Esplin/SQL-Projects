@@ -69,14 +69,25 @@ mysql -u root -p < scripts/grant_app_privileges.sql
 
 cp .env.example .env       # fill in DT_DB_PASSWORD and DT_SESSION_SECRET
 .venv/bin/python scripts/create_admin.py     # prompts for the admin password
-.venv/bin/uvicorn diamond_app.main:app --host 127.0.0.1 --port 8000
+                                             # (12+ characters, not a common password)
+.venv/bin/uvicorn diamond_app.main:app --host 127.0.0.1 --port 8000 --no-server-header
 ```
 
 Open http://127.0.0.1:8000, log in as the admin, then on the **Admin** page:
 1. Add employees. Give polishers the job role "Polisher".
 2. Add a login for each person who uses the app.
 
-**Scanning labels with a phone.** Set `DT_BASE_URL` to `http://<LAN address>:8000`, using the computer's address on your local network (on macOS, `ipconfig getifaddr en0` prints it), and start uvicorn with `--host 0.0.0.0`. Keep the real address in `app/.env` only, never in committed files. Phones on the same network can then open a stone by scanning its QR label. A USB barcode scanner also works in any code box.
+**Scanning labels with a phone.** Set `DT_BASE_URL` to `http://<LAN address>:8000`, using the computer's address on your local network (on macOS, `ipconfig getifaddr en0` prints it), and start uvicorn with `--host 0.0.0.0`. Keep the real address in `app/.env` only, never in committed files. Phones on the same network can then open a stone by scanning its QR label. A USB barcode scanner also works in any code box. The app only answers to the host names it knows (the `DT_BASE_URL` host, `127.0.0.1` and `localhost`); add others to `DT_ALLOWED_HOSTS`.
+
+**Container.** CI publishes an image to `ghcr.io` after every passing build of `main`, with signed build provenance. To build and run it yourself:
+
+```bash
+docker build -t diamond-tracker app
+docker run --rm -p 127.0.0.1:8000:8000 --env-file app/.env -e DT_DB_HOST=host.docker.internal \
+  -v dt-storage:/app/storage diamond-tracker
+```
+
+The container connects from outside `localhost`, so its MySQL account needs a matching host, for example `'diamond_app'@'%'` limited by your firewall.
 
 ### Roles
 
@@ -108,13 +119,40 @@ Open http://127.0.0.1:8000, log in as the admin, then on the **Admin** page:
   | Sold | Paid or shipped |
   | Split | Cut into child stones |
 
-### Tests
+### Security
 
-The tests rebuild `Diamond_company` from `sql/`, so run them **only against a throwaway MySQL server**:
+- **Logins.** Passwords are hashed with argon2id and must be at least 12 characters, not a common password and not containing the username. Five wrong passwords lock that username for 15 minutes, and twenty from one address lock that address.
+- **Sessions.** The signed session cookie is HttpOnly and SameSite=Lax; over HTTPS (`DT_SECURE_COOKIES=true`) it is also Secure with the `__Host-` prefix, and HSTS is sent. A session ends after `DT_SESSION_IDLE_MINUTES` (60) without activity, after `DT_SESSION_MAX_AGE_HOURS` (12) in total, when the account is deactivated, or when its password changes.
+- **Requests.** Every POST must come from this site (Fetch Metadata / Origin) and carry the CSRF token. Request bodies are capped at the upload limit plus 1 MB.
+- **Pages.** A strict Content-Security-Policy with no inline scripts or styles, plus `nosniff`, frame, opener and referrer policies. Pages are never cached; static files are cached only by content hash.
+- **Uploads.** Certificates are identified by content. Images must decode fully, and PDFs with scripts, launch actions or attachments are refused.
+- **Logs.** Logins, lockouts, refused requests and admin changes are logged to stderr (logger `diamond_app.security`).
+
+The session cookie is stateless, so logging out deletes it from the browser, but a copy taken earlier stays valid until it goes idle or expires. Keep the idle timeout short on shared computers.
+
+### Tests and CI
 
 ```bash
-DT_TEST_DB_HOST=127.0.0.1 DT_TEST_DB_PORT=<port> DT_TEST_DB_USER=root DT_TEST_ALLOW_RESET=1 .venv/bin/pytest
+cd app
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/ruff check .
+.venv/bin/pytest tests/unit          # no database needed
 ```
+
+The integration tests rebuild `Diamond_company` from `sql/`, so run them **only against a throwaway MySQL server**, for example `docker run -d --rm -e MYSQL_ALLOW_EMPTY_PASSWORD=yes -p 127.0.0.1:33999:3306 mysql:8.4`:
+
+```bash
+DT_TEST_DB_HOST=127.0.0.1 DT_TEST_DB_PORT=33999 DT_TEST_DB_USER=root DT_TEST_ALLOW_RESET=1 .venv/bin/pytest
+```
+
+GitHub Actions (`.github/workflows/`) runs on every pull request:
+
+| Workflow | Checks |
+|---|---|
+| Diamond Tracker CI/CD | ruff, pip-audit, unit tests on Python 3.12 and 3.14, integration tests on MySQL 8.4 with an 85% coverage floor, a full SQL deploy and CSV import (53,942 rows, then 0 on the rerun), and a container build. On `main` it then pushes the image. |
+| Security | CodeQL for Python and the workflows, gitleaks over the full history, dependency review on pull requests, and a weekly pip-audit |
+
+Dependabot proposes weekly updates for Python packages, the base image and the actions, which are pinned to commit SHAs. `.pre-commit-config.yaml` runs ruff and gitleaks before each commit (`.venv/bin/pre-commit install`).
 
 ## GIA 4Cs
 
