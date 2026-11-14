@@ -76,7 +76,7 @@ Open http://127.0.0.1:8000, log in as the admin, then on the **Admin** page:
 1. Add employees. Give polishers the job role "Polisher".
 2. Add a login for each person who uses the app.
 
-**Scanning labels with a phone.** Set `DT_BASE_URL` to the computer's LAN address (for example `http://192.168.1.20:8000`) and start uvicorn with `--host 0.0.0.0`. Phones on the same network can then open a stone by scanning its QR label. A USB barcode scanner also works in any code box.
+**Scanning labels with a phone.** Set `DT_BASE_URL` to `http://<LAN address>:8000`, using the computer's address on your local network (on macOS, `ipconfig getifaddr en0` prints it), and start uvicorn with `--host 0.0.0.0`. Keep the real address in `app/.env` only, never in committed files. Phones on the same network can then open a stone by scanning its QR label. A USB barcode scanner also works in any code box.
 
 ### Roles
 

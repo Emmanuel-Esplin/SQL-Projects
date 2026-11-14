@@ -97,5 +97,5 @@ def test_code_normalization():
     assert normalize_code(" dc-26-7k3m9q ") == "DC-26-7K3M9Q"
     assert normalize_code("DC267K3M9Q") == "DC-26-7K3M9Q"
     assert normalize_code("DC-26-OIL123") == "DC-26-011123"
-    assert normalize_code("http://192.168.1.5:8000/d/DC-26-7K3M9Q") == "DC-26-7K3M9Q"
+    assert normalize_code("http://192.0.2.5:8000/d/DC-26-7K3M9Q") == "DC-26-7K3M9Q"
     assert normalize_code("SKU-GIA-12") == "SKU-GIA-12"

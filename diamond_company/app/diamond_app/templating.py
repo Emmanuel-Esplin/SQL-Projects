@@ -1,5 +1,6 @@
 """Jinja2 setup: shared helpers available in every template."""
 
+import hashlib
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -7,13 +8,22 @@ from urllib.parse import urlencode
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
-from markupsafe import Markup
+from markupsafe import Markup, escape
 
 from . import catalog
 from .security import csrf_token
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
+
+
+@lru_cache
+def static_version() -> str:
+    """Changes whenever a CSS or JS file changes, so browsers can cache them."""
+    digest = hashlib.sha256()
+    for path in sorted((PACKAGE_DIR / "static").glob("*/*.[cj]s")):
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
 
 
 @lru_cache
@@ -24,9 +34,9 @@ def icon(name: str, label: str | None = None) -> Markup:
     """
     path = PACKAGE_DIR / "static" / "icons" / f"{name}.svg"
     svg = path.read_text().split("-->", 1)[-1].strip()
-    a11y = f'role="img" aria-label="{label}"' if label else 'aria-hidden="true" focusable="false"'
+    a11y = f'role="img" aria-label="{escape(label)}"' if label else 'aria-hidden="true" focusable="false"'
     svg = svg.replace("<svg", f'<svg class="icon" {a11y}', 1).replace('class="lucide', 'data-lucide="', 1)
-    return Markup(svg)
+    return Markup(svg)  # noqa: S704 - trusted file from static/icons; the only variable part is escaped
 
 
 def money(value) -> str:
@@ -59,6 +69,7 @@ env.globals.update(
     catalog=catalog,
     color_label=color_label,
     query_with=query_with,
+    static_version=static_version,
     zip=zip,
 )
 env.filters.update(money=money, carat=carat)

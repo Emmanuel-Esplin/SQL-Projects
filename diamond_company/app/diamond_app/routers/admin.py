@@ -15,7 +15,18 @@ from sqlalchemy.exc import IntegrityError
 
 from ..db import connect, fetch_all, fetch_one
 from ..forms import clean, decimal_field, int_field
-from ..security import POLISHER, ROLE_LABELS, ROLES, CurrentUser, hash_password, password_problem, require_roles
+from ..security import (
+    POLISHER,
+    ROLE_LABELS,
+    ROLES,
+    CurrentUser,
+    hash_password,
+    log_value,
+    password_problem,
+    refresh_session_auth,
+    require_roles,
+    security_log,
+)
 from ..templating import flash, render
 
 router = APIRouter(prefix="/admin")
@@ -68,7 +79,7 @@ def create_user(request: Request, username: str = Form(""), full_name: str = For
     employee = int_field(errors, "employee_id", employee_id, "employee record")
     if role == POLISHER and employee is None and "employee_id" not in errors:
         errors["employee_id"] = "Polishers must be linked to their employee record."
-    problem = password_problem(password)
+    problem = password_problem(password, username)
     if problem:
         errors["password"] = problem
     if not errors:
@@ -80,6 +91,8 @@ def create_user(request: Request, username: str = Form(""), full_name: str = For
                     {"u": username, "n": full_name.strip(), "h": hash_password(password), "r": role, "e": employee})
         except IntegrityError:
             errors["username"] = "That username, or that employee's login, already exists."
+        else:
+            security_log.info("user created username=%s role=%s by=%s", log_value(username), role, user.username)
     if errors:
         return _failed(request, user, "user", errors,
                        {"username": username, "full_name": full_name, "role": role, "employee_id": employee_id})
@@ -95,20 +108,31 @@ def toggle_user(request: Request, user_id: int, active: str = Form(""), user: Cu
     with connect(user.username) as conn:
         conn.execute(text("UPDATE APP_USERS SET is_active = :a WHERE user_id = :id"),
                      {"a": active == "1", "id": user_id})
+    security_log.info("user %s user_id=%s by=%s", "activated" if active == "1" else "deactivated", user_id,
+                      user.username)
     flash(request, "User activated." if active == "1" else "User deactivated. They are logged out immediately.")
     return RedirectResponse("/admin", status_code=303)
 
 
 @router.post("/users/{user_id}/password")
 def reset_password(request: Request, user_id: int, password: str = Form(""), user: CurrentUser = Depends(admin_only)):
-    problem = password_problem(password)
-    if problem:
-        flash(request, f"Password not changed: {problem}", "error")
+    with connect(user.username) as conn:
+        target = fetch_one(conn, "SELECT username FROM APP_USERS WHERE user_id = :id", id=user_id)
+        if not target:
+            flash(request, "That user does not exist.", "error")
+            return RedirectResponse("/admin", status_code=303)
+        problem = password_problem(password, target["username"])
+        if problem:
+            flash(request, f"Password not changed: {problem}", "error")
+            return RedirectResponse("/admin", status_code=303)
+        new_hash = hash_password(password)
+        conn.execute(text("UPDATE APP_USERS SET password_hash = :h WHERE user_id = :id"), {"h": new_hash, "id": user_id})
+    security_log.info("password reset user_id=%s by=%s", user_id, user.username)
+    if user_id == user.user_id:
+        refresh_session_auth(request, new_hash)
+        flash(request, "Your password was changed. Other sessions of yours were logged out.")
     else:
-        with connect(user.username) as conn:
-            conn.execute(text("UPDATE APP_USERS SET password_hash = :h WHERE user_id = :id"),
-                         {"h": hash_password(password), "id": user_id})
-        flash(request, "Password changed.")
+        flash(request, f"Password changed. Any session {target['username']} had open was logged out.")
     return RedirectResponse("/admin", status_code=303)
 
 

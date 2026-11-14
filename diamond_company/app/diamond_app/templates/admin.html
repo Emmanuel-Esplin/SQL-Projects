@@ -34,7 +34,7 @@
                 <summary>Reset password</summary>
                 <form class="form mt-md" method="post" action="/admin/users/{{ u.user_id }}/password">{{ csrf() }}
                   <label for="pw-{{ u.user_id }}">New password for {{ u.username }}</label>
-                  <input id="pw-{{ u.user_id }}" name="password" type="password" autocomplete="new-password" minlength="12" required>
+                  <input id="pw-{{ u.user_id }}" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required>
                   <button class="btn btn-secondary btn-small" type="submit">Set password</button>
                 </form>
               </details>
@@ -67,7 +67,7 @@
           {% if ue.get("employee_id") %}<p class="field-error" id="e-user-employee_id">{{ ue.employee_id }}</p>{% endif %}
         </div>
         {{ input("password", "Password", uv, ue, type="password", required=True, prefix="user-",
-                 hint="At least 12 characters. Share it with the person privately.", attrs='autocomplete="new-password"') }}
+                 hint="At least 12 characters, not the username or a common password. A phrase of unrelated words works well. Share it privately.", attrs='autocomplete="new-password"') }}
       </div>
       <div class="form-actions"><button class="btn btn-primary" type="submit">Add user</button></div>
     </form>
