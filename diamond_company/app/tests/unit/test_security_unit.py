@@ -24,6 +24,10 @@ def test_password_problem_accepts(password):
     assert security.password_problem(password, "keeper") is None
 
 
+def test_strength_rules_text_matches_limits():
+    assert f"{security.MIN_PASSWORD_LENGTH}-{security.MAX_PASSWORD_LENGTH} characters" in security.STRENGTH_RULES
+
+
 def test_short_username_is_not_matched_inside_passwords():
     assert security.password_problem("Al-is-fine-here-ok", "al") is None
 
