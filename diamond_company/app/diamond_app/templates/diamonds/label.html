@@ -1,8 +1,9 @@
 {% extends "base.html" %}
+{% from "macros.html" import inscription with context %}
 {% block content %}
 <div class="page-header no-print">
   <div>
-    <h1>Label · <span class="mono">{{ d.sku }}</span></h1>
+    <h1>Label · {{ inscription(d.sku) }}</h1>
     <p class="muted">Print on plain paper or label stock and attach to the stone's parcel.</p>
   </div>
   <div class="form-actions">

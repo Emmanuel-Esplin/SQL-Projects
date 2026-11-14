@@ -91,3 +91,14 @@
 {% macro grades(d) -%}
   {{ color_label(d) }} · {{ d.clarity_grade or "-" }}{% if d.cut_grade %} · {{ d.cut_grade }}{% endif %}
 {%- endmacro %}
+
+{# A tracking code set like a girdle inscription: DC-yy- muted, the six
+   identifying characters bold. Imported SKUs are shown as they are. #}
+{% macro inscription(code) -%}
+  {%- set parts = code.rsplit("-", 1) if code.startswith("DC-") else [] -%}
+  {%- if parts|length == 2 -%}
+    <span class="inscription"><span class="ins-prefix">{{ parts[0] }}-</span><span class="ins-body">{{ parts[1] }}</span></span>
+  {%- else -%}
+    <span class="inscription">{{ code }}</span>
+  {%- endif -%}
+{%- endmacro %}

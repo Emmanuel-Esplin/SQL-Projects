@@ -4,19 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#334155" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)">
   <title>{% block title %}{{ title or "Diamond Tracker" }}{% endblock %} · Diamond Tracker</title>
-  <link rel="stylesheet" href="/static/css/app.css">
-  <script src="/static/js/htmx.min.js" defer></script>
-  <script src="/static/js/app.js" defer></script>
+  <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/static/fonts/montserrat-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/css/app.css?v={{ static_version() }}">
+  <script src="/static/js/app.js?v={{ static_version() }}"></script>
+  <script src="/static/js/htmx.min.js?v={{ static_version() }}" defer></script>
 </head>
 <body{% if user %} hx-headers='{"X-CSRF-Token": "{{ csrf_token(request) }}"}'{% endif %}>
 {% block body %}
 <a class="skip-link" href="#main">Skip to main content</a>
 <div class="layout">
   <aside class="sidebar" aria-label="Primary">
-    <a class="brand" href="/">{{ icon("gem") }} Diamond Tracker</a>
+    <div class="sidebar-head">
+      <a class="brand" href="/">{{ icon("gem") }} Diamond Tracker</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" data-nav-toggle>
+        {{ icon("menu") }}<span>Menu</span>
+      </button>
+    </div>
     {% set section = section|default("") %}
-    <nav class="nav" aria-label="Main navigation">
+    <nav class="nav" id="primary-nav" aria-label="Main navigation">
       {% macro nav_item(href, name, label, key) -%}
         <a href="{{ href }}"{% if section == key %} aria-current="page"{% endif %}>{{ icon(name) }}<span class="nav-label">{{ label }}</span></a>
       {%- endmacro %}
@@ -49,7 +59,7 @@
       </form>
     </header>
     <main id="main" class="content" tabindex="-1">
-      {% if flash %}<div class="alert alert-{{ flash.kind }}" role="status"><p>{{ flash.message }}</p></div>{% endif %}
+      {% if flash %}<div class="alert alert-{{ flash.kind }}" role="{{ 'alert' if flash.kind == 'error' else 'status' }}"><p>{{ flash.message }}</p></div>{% endif %}
       {% block content %}{% endblock %}
     </main>
   </div>
