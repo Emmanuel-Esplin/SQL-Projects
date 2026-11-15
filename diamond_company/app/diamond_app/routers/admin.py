@@ -196,20 +196,42 @@ def create_customer(request: Request, full_name: str = Form(""), email: str = Fo
 
 # ------------------------------------------------------- suppliers / rough
 
+def _single_spaced(value: str | None) -> str | None:
+    """Trim and collapse inner spaces, so "Facet  Mines " matches "Facet Mines"."""
+    return " ".join(value.split()) if value and value.strip() else None
+
+
 @router.post("/suppliers")
 def create_supplier(request: Request, name: str = Form(""), country: str = Form(""), contact_email: str = Form(""),
                     user: CurrentUser = Depends(admin_only)):
-    if not clean(name):
-        return _failed(request, user, "supplier", {"name": "Enter the supplier's name."},
+    errors: dict[str, str] = {}
+    name_value = _single_spaced(name)
+    country_value = _single_spaced(country)
+    email_value = clean(contact_email)
+    if not name_value:
+        errors["name"] = "Enter the supplier's name."
+    elif len(name_value) > 120:
+        errors["name"] = "Keep the name to 120 characters."
+    if country_value and len(country_value) > 80:
+        errors["country"] = "Keep the country to 80 characters."
+    if email_value and (len(email_value) > 120 or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_value)):
+        errors["contact_email"] = "Enter an email address like name@example.com."
+    if not errors:
+        try:
+            with connect(user.username) as conn:
+                conn.execute(text("INSERT INTO SUPPLIERS (name, country, contact_email) VALUES (:n, :c, :e)"),
+                             {"n": name_value, "c": country_value, "e": email_value})
+        except IntegrityError as exc:
+            # The duplicate-key message names the index that matched
+            if "contact_email" in str(exc.orig):
+                errors["contact_email"] = "Another supplier already uses that email."
+            else:
+                where = f" in {country_value}" if country_value else " with no country"
+                errors["name"] = f"{name_value}{where} is already a supplier. Choose it from the list instead."
+    if errors:
+        return _failed(request, user, "supplier", errors,
                        {"name": name, "country": country, "contact_email": contact_email})
-    try:
-        with connect(user.username) as conn:
-            conn.execute(text("INSERT INTO SUPPLIERS (name, country, contact_email) VALUES (:n, :c, :e)"),
-                         {"n": name.strip()[:120], "c": clean(country), "e": clean(contact_email)})
-    except IntegrityError:
-        return _failed(request, user, "supplier", {"name": "That supplier already exists."},
-                       {"name": name, "country": country, "contact_email": contact_email})
-    flash(request, f"Supplier {name.strip()} added.")
+    flash(request, f"Supplier {name_value} added.")
     return RedirectResponse("/admin#rough", status_code=303)
 
 

@@ -62,9 +62,14 @@ CREATE TABLE SUPPLIERS(
   country VARCHAR(80) COMMENT 'Country of origin',
   contact_email VARCHAR(120) UNIQUE COMMENT 'Supplier contact email',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Record creation timestamp',
-  UNIQUE KEY uk_name_country (name, country)
-) ENGINE=InnoDB 
-  COMMENT='Diamond suppliers - independent table';
+  -- A unique key treats NULLs as distinct, so (name, country) alone would let
+  -- the same supplier be added again and again without a country. This key
+  -- folds "no country" into one value. INVISIBLE keeps it out of SELECT *.
+  country_key VARCHAR(80) AS (COALESCE(country, '')) STORED INVISIBLE
+    COMMENT 'Country with NULL as empty string, for the uniqueness check',
+  UNIQUE KEY uk_name_country (name, country_key)
+) ENGINE=InnoDB
+  COMMENT='Diamond suppliers - one row per supplier name and country';
 
 CREATE TABLE EMPLOYEES(
   employee_id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique employee identifier',
