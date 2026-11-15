@@ -66,6 +66,53 @@ def test_customers(client_for):
     assert bad.status_code == 422 and "name@example.com" in bad.text
 
 
+def _supplier_count(name: str) -> int:
+    return _row("SELECT COUNT(*) AS n FROM SUPPLIERS WHERE name = :n", n=name)["n"]
+
+
+def test_suppliers_cannot_be_added_twice(client_for):
+    admin = client_for("admin")
+    assert admin.post("/admin/suppliers", {"name": "Karoo Rough", "country": "South Africa"}).status_code == 303
+    # Same supplier again, with different case and spacing
+    again = admin.post("/admin/suppliers", {"name": " karoo  ROUGH ", "country": "south africa"})
+    assert again.status_code == 422 and "already a supplier" in again.text
+    # The same company in another country is a separate supplier
+    assert admin.post("/admin/suppliers", {"name": "Karoo Rough", "country": "Namibia"}).status_code == 303
+    assert _supplier_count("Karoo Rough") == 2
+
+    # Without a country: allowed once, then refused (NULLs used to slip past the key)
+    assert admin.post("/admin/suppliers", {"name": "Nameless Rough"}).status_code == 303
+    again = admin.post("/admin/suppliers", {"name": "Nameless Rough", "country": "  "})
+    assert again.status_code == 422 and "with no country" in again.text
+    assert _supplier_count("Nameless Rough") == 1
+
+
+def test_supplier_email_errors_point_at_the_email(client_for):
+    admin = client_for("admin")
+    assert admin.post("/admin/suppliers", {"name": "Mail One", "contact_email": "rough@example.com"}).status_code == 303
+    clash = admin.post("/admin/suppliers", {"name": "Mail Two", "contact_email": "rough@example.com"})
+    assert clash.status_code == 422 and "already uses that email" in clash.text
+    bad = admin.post("/admin/suppliers", {"name": "Mail Three", "contact_email": "not-an-email"})
+    assert bad.status_code == 422 and "name@example.com" in bad.text
+    long_country = admin.post("/admin/suppliers", {"name": "Far Away", "country": "x" * 81})
+    assert long_country.status_code == 422 and "80 characters" in long_country.text
+
+
+def test_supplier_key_holds_in_the_database_too():
+    """The rule lives in the schema, so the import and any other writer obey it."""
+    import pytest
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+
+    with connect() as conn:
+        conn.execute(text("INSERT INTO SUPPLIERS (name) VALUES ('Direct Insert Co')"))
+        with pytest.raises(IntegrityError):
+            conn.execute(text("INSERT INTO SUPPLIERS (name, country) VALUES ('Direct Insert Co', NULL)"))
+        # The helper column stays out of SELECT *
+        row = conn.execute(text("SELECT * FROM SUPPLIERS WHERE name = 'Direct Insert Co'")).mappings().one()
+        assert "country_key" not in row
+
+
 def test_suppliers_and_rough_lots(client_for):
     admin = client_for("admin")
     assert admin.post("/admin/suppliers", {"name": "Facet Mines", "country": "Botswana"}).status_code == 303

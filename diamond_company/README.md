@@ -130,6 +130,28 @@ The container connects from outside `localhost`, so its MySQL account needs a ma
 
 The session cookie is stateless, so logging out deletes it from the browser, but a copy taken earlier stays valid until it goes idle or expires. Keep the idle timeout short on shared computers.
 
+### Upgrading an existing database
+
+`sql/01_schema.sql` drops and recreates the database, so a database built before a schema change needs the change applied by hand.
+
+**Suppliers are unique by name and country (2026-11-15).** Earlier schemas let the same supplier be added repeatedly when it had no country. First list any duplicates:
+
+```sql
+SELECT name, COALESCE(country, '') AS country, GROUP_CONCAT(supplier_id ORDER BY supplier_id) AS ids
+FROM SUPPLIERS GROUP BY name, COALESCE(country, '') HAVING COUNT(*) > 1;
+```
+
+For each group, keep one id, move its rough lots (`UPDATE ROUGH_STONES SET supplier_id = <kept> WHERE supplier_id = <other>`) and delete the others. Then:
+
+```sql
+ALTER TABLE SUPPLIERS
+  ADD COLUMN country_key VARCHAR(80) AS (COALESCE(country, '')) STORED INVISIBLE,
+  DROP INDEX uk_name_country,
+  ADD UNIQUE KEY uk_name_country (name, country_key);
+```
+
+If a duplicate remains, the `ALTER` fails with error 1062 and changes nothing.
+
 ### Tests and CI
 
 ```bash
