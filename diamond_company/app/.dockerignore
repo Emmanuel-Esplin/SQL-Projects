@@ -1,0 +1,8 @@
+# Only requirements.txt and diamond_app/ are needed in the image.
+# Never send settings, uploads or local environments to the build.
+*
+!requirements.txt
+!diamond_app/
+**/__pycache__
+**/*.py[cod]
+**/.DS_Store

@@ -1,0 +1,199 @@
+name: Diamond Tracker CI/CD
+
+# Lint, audit and test the app and its SQL on every change; on main, publish
+# a container image only after every check has passed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "diamond_company/**"
+      - ".github/workflows/diamond-tracker-ci.yml"
+  pull_request:
+    paths:
+      - "diamond_company/**"
+      - ".github/workflows/diamond-tracker-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: diamond_company/app
+
+env:
+  PYTHON_VERSION: "3.14"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  lint:
+    name: Lint and audit dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: diamond_company/app/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Ruff (style, bugs and bandit security rules)
+        run: ruff check --output-format=github .
+      - name: Known vulnerabilities in pinned dependencies
+        run: pip-audit -r requirements.txt -r requirements-dev.txt --progress-spinner off
+
+  unit:
+    name: Unit tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.14"]  # oldest supported and current
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: diamond_company/app/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest tests/unit
+
+  integration:
+    name: Integration tests (MySQL 8.4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-throwaway  # disposable container, never a real server
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-throwaway"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      DT_TEST_DB_HOST: 127.0.0.1
+      DT_TEST_DB_PORT: "3306"
+      DT_TEST_DB_USER: root
+      DT_TEST_DB_PASSWORD: ci-throwaway
+      DT_TEST_ALLOW_RESET: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: diamond_company/app/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: All tests with coverage
+        run: |
+          coverage run -m pytest
+          coverage report --fail-under=85
+          coverage xml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: coverage
+          path: diamond_company/app/coverage.xml
+          retention-days: 14
+
+  sql-import:
+    name: SQL deploy and CSV import
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-throwaway
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-throwaway"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      MYSQL_PWD: ci-throwaway
+    defaults:
+      run:
+        working-directory: diamond_company
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Deploy every script in order
+        run: |
+          mysql -h 127.0.0.1 -uroot -e "SET GLOBAL local_infile = 1"
+          for f in sql/0*.sql; do echo "== $f"; mysql -h 127.0.0.1 -uroot < "$f"; done
+      - name: Transform the raw CSV to GIA grades
+        run: python3 scripts/transform_to_gia.py
+      - name: Import twice; the second run must add nothing
+        run: |
+          run_import() { mysql -h 127.0.0.1 -uroot --local-infile=1 -N -B Diamond_company < scripts/load_diamonds.sql | tail -1; }
+          first=$(run_import);  echo "first run:  $first"
+          second=$(run_import); echo "second run: $second"
+          [ "$(echo "$first"  | cut -f1,2)" = "$(printf '53942\t0')" ] || { echo "::error::expected 53942 imported, 0 rejected"; exit 1; }
+          [ "$(echo "$second" | cut -f1)" = "0" ] || { echo "::error::second import should add 0 rows"; exit 1; }
+
+  image:
+    name: Container image
+    needs: [lint, unit, integration, sql-import]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write       # push to ghcr.io (main only)
+      id-token: write       # sign the build provenance
+      attestations: write
+    env:
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Image name (registry names must be lower case)
+        id: name
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "image=ghcr.io/${OWNER,,}/diamond-tracker" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.name.outputs.image }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: diamond_company/app
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: env.PUBLISH == 'true'
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

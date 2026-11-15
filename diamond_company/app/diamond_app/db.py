@@ -9,9 +9,10 @@ triggers record who made the change.
 """
 
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Any, Iterator
+from typing import Any
 
 from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.engine import URL
@@ -41,7 +42,9 @@ def get_engine() -> Engine:
         database=s.db_name,
         query={"charset": "utf8mb4"},
     )
-    return create_engine(url, isolation_level="AUTOCOMMIT", pool_pre_ping=True, pool_recycle=3600)
+    connect_args = {"ssl": {"ca": str(s.db_ssl_ca)}} if s.db_ssl_ca else {}
+    return create_engine(url, isolation_level="AUTOCOMMIT", pool_pre_ping=True, pool_recycle=3600,
+                         connect_args=connect_args)
 
 
 @contextmanager
@@ -89,4 +92,4 @@ def call_procedure(conn: Connection, name: str, args: list[Any], outs: list[str]
     placeholders = ", ".join(["%s"] * len(args) + [f"@{o}" for o in outs])
     conn.exec_driver_sql(f"CALL {name}({placeholders})", tuple(args))
     values = conn.exec_driver_sql("SELECT " + ", ".join(f"@{o}" for o in outs)).fetchone()
-    return ProcedureResult(zip(outs, values))
+    return ProcedureResult(zip(outs, values, strict=True))

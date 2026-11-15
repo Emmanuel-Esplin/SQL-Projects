@@ -1,0 +1,39 @@
+version: 2
+
+# A short cooldown skips releases in their first days, when a hijacked or
+# broken package is most likely to be caught and pulled. Security updates
+# are not delayed by it.
+
+updates:
+  - package-ecosystem: pip
+    directory: /diamond_company/app
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(app)"
+
+  - package-ecosystem: docker
+    directory: /diamond_company/app
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps(image)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(ci)"

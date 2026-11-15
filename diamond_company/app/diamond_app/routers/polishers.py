@@ -16,7 +16,7 @@ def polishers(request: Request, user: CurrentUser = Depends(get_current_user)):
     with connect(user.username) as conn:
         workload = fetch_all(
             conn,
-            "SELECT w.* FROM v_polisher_workload w JOIN (" + queries.POLISHERS_SQL + ") p "
+            "SELECT w.* FROM v_polisher_workload w JOIN (" + queries.POLISHERS_SQL + ") p "  # noqa: S608 - constant SQL
             "ON p.employee_id = w.employee_id ORDER BY w.full_name",
         )
     return render(request, "polishers/list.html", section="polishers", title="Polishers", workload=workload)

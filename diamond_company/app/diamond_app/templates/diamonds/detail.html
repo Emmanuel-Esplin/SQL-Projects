@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import csrf, status_badge, polish_badge, code_link with context %}
+{% from "macros.html" import csrf, status_badge, polish_badge, code_link, inscription with context %}
 
 {% macro tree(node, current_id) -%}
   <li>
@@ -13,7 +13,7 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <h1 class="mono">{{ d.sku }}</h1>
+    <h1>{{ inscription(d.sku) }}</h1>
     <p>{{ status_badge(d.status) }} {{ polish_badge(d.polish_state) }}
       {% if out %}<span class="badge badge-overdue">Out of safe: {{ catalog.PURPOSES[out.purpose] }}</span>{% endif %}
       {% if d.certified %}<span class="badge badge-neutral">Certified</span>{% endif %}</p>
@@ -72,7 +72,7 @@
     <div class="form-actions">
       <img class="qr" src="/diamonds/{{ d.diamond_id }}/qr.svg" alt="QR code for {{ d.sku }}">
       <div>
-        <p class="mono">{{ d.sku }}</p>
+        <p>{{ inscription(d.sku) }}</p>
         <p class="hint">Scanning opens <span class="mono">{{ qr_target }}</span></p>
       </div>
     </div>
