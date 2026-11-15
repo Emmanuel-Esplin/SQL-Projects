@@ -48,6 +48,8 @@ DT_TEST_DB_HOST=127.0.0.1 DT_TEST_DB_PORT=<port> DT_TEST_DB_USER=root DT_TEST_AL
 
 CI (`.github/workflows/diamond-tracker-ci.yml`) runs ruff, pip-audit, both test suites with an 85% coverage floor, the SQL deploy plus CSV import check, and a container build; it pushes the image to GHCR only from `main`. `security.yml` runs CodeQL, gitleaks and dependency review. Pin every action to a full commit SHA with the version in a comment.
 
+`main` is protected by a ruleset with no bypass: never push to it directly. Work on a branch and open a pull request; it merges once the **CI passed** job (which `needs` every CI job, so add new jobs to its list), CodeQL, gitleaks and dependency review pass.
+
 ### Architecture
 
 - **GIA 4Cs.** `CUT`, `COLOR` (all of D–Z) and `CLARITY` use the grade as the primary key and carry `grade_rank` (1 = best), `category` and a price `multiplier`. `CARAT_BAND` groups measured carat weight into ranges; it has no foreign key. `DIAMONDS` has a foreign key to each grade table. Carat is `DECIMAL(5,2)` because GIA reports weight to the hundredth. Order grades by `grade_rank`, never alphabetically. Price = carat × base_price_per_carat × the three multipliers (`sp_compute_price`).
