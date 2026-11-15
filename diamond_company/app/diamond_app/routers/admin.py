@@ -14,7 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from ..db import connect, fetch_all, fetch_one
-from ..forms import clean, decimal_field, int_field
+from ..forms import clean, decimal_field, int_field, looks_like_email
 from ..security import (
     POLISHER,
     ROLE_LABELS,
@@ -179,7 +179,7 @@ def create_customer(request: Request, full_name: str = Form(""), email: str = Fo
     if not clean(full_name):
         errors["full_name"] = "Enter the customer's name."
     email_value = clean(email)
-    if email_value and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_value):
+    if email_value and not looks_like_email(email_value):
         errors["email"] = "Enter an email address like name@example.com."
     if not errors:
         try:
@@ -214,7 +214,7 @@ def create_supplier(request: Request, name: str = Form(""), country: str = Form(
         errors["name"] = "Keep the name to 120 characters."
     if country_value and len(country_value) > 80:
         errors["country"] = "Keep the country to 80 characters."
-    if email_value and (len(email_value) > 120 or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_value)):
+    if email_value and not looks_like_email(email_value):
         errors["contact_email"] = "Enter an email address like name@example.com."
     if not errors:
         try:

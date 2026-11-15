@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 
 from diamond_app.codes import normalize_code
-from diamond_app.forms import choice_field, clean, decimal_field, int_field
+from diamond_app.forms import choice_field, clean, decimal_field, int_field, looks_like_email
 
 
 @pytest.mark.parametrize(("raw", "expected"), [
@@ -72,3 +72,23 @@ def test_int_field():
     assert int_field(errors, "b", "4.2", "lot") is None
     assert int_field(errors, "c", None, "lot") is None
     assert errors == {"b": "Choose a valid lot."}
+
+
+@pytest.mark.parametrize("value", ["name@example.com", "a.b+tag@mail.example.co.za", "x@y.z"])
+def test_looks_like_email_accepts(value):
+    assert looks_like_email(value)
+
+
+@pytest.mark.parametrize("value", ["", "name", "name@", "@example.com", "name@example", "name@@example.com",
+                                   "a@b@c.com", "name@example..com", "name@.example.com", "na me@example.com",
+                                   "x" * 115 + "@ex.com"])
+def test_looks_like_email_rejects(value):
+    assert not looks_like_email(value)
+
+
+def test_looks_like_email_is_fast_on_hostile_input():
+    import time
+
+    start = time.perf_counter()
+    assert not looks_like_email("!@!." + "!." * 50_000, max_length=10**6)
+    assert time.perf_counter() - start < 0.5

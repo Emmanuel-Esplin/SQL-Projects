@@ -57,3 +57,12 @@ def int_field(errors: dict, name: str, raw: str | None, label: str, *, required:
     except ValueError:
         errors[name] = f"Choose a valid {label}."
         return None
+
+
+def looks_like_email(value: str, max_length: int = 120) -> bool:
+    """name@domain.tld, checked in linear time (no backtracking regex)."""
+    if len(value) > max_length or any(c.isspace() for c in value) or value.count("@") != 1:
+        return False
+    local, domain = value.split("@")
+    labels = domain.split(".")
+    return bool(local) and len(labels) >= 2 and all(labels)
