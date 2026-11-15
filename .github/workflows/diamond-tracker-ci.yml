@@ -9,10 +9,9 @@ on:
     paths:
       - "diamond_company/**"
       - ".github/workflows/diamond-tracker-ci.yml"
+  # Every pull request, with no path filter: main requires the "CI passed"
+  # check, and a filtered-out workflow would never report it
   pull_request:
-    paths:
-      - "diamond_company/**"
-      - ".github/workflows/diamond-tracker-ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -197,3 +196,24 @@ jobs:
           subject-name: ${{ steps.name.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+  ci-passed:
+    # The one check the main branch ruleset requires. It needs every job, so
+    # new jobs are covered without editing the ruleset.
+    name: CI passed
+    if: always()
+    needs: [lint, unit, integration, sql-import, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: .  # nothing is checked out here
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = "success" ] || { echo "::error::A required job did not succeed ($result)"; exit 1; }
+          done

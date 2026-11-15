@@ -174,6 +174,8 @@ GitHub Actions (`.github/workflows/`) runs on every pull request:
 | Diamond Tracker CI/CD | ruff, pip-audit, unit tests on Python 3.12 and 3.14, integration tests on MySQL 8.4 with an 85% coverage floor, a full SQL deploy and CSV import (53,942 rows, then 0 on the rerun), and a container build. On `main` it then pushes the image. |
 | Security | CodeQL for Python and the workflows, gitleaks over the full history, dependency review on pull requests, and a weekly pip-audit |
 
+**`main` is protected** by a repository ruleset: changes arrive only through pull requests that are up to date with `main` and pass **CI passed** (a final job that needs every CI job), CodeQL, the secret scan and dependency review. CodeQL alerts of high severity block the merge, and force pushes and deleting `main` are refused, with no bypass. Edit the rules under Settings → Rules → Rulesets.
+
 Dependabot proposes weekly updates for Python packages, the base image and the actions, which are pinned to commit SHAs. `.pre-commit-config.yaml` runs ruff and gitleaks before each commit (`.venv/bin/pre-commit install`).
 
 ## GIA 4Cs
