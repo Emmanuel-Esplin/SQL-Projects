@@ -1,0 +1,10 @@
+# Accepted findings, one exact fingerprint (commit:file:rule:line) per line.
+# Only for findings in old commits that cannot be fixed by a new edit; fix
+# anything in the current files instead. Never list a real credential here:
+# rotate it.
+
+# Private addresses in an example URL (README) and a test URL, committed before
+# the private-ipv4-address rule existed and since replaced. Not reachable from
+# the internet.
+ba2e6475967265660dfd55d3fb9027f9d6fcb260:diamond_company/README.md:private-ipv4-address:79
+ba2e6475967265660dfd55d3fb9027f9d6fcb260:diamond_company/app/tests/test_security.py:private-ipv4-address:100
