@@ -1,8 +1,8 @@
 # Tests, lint and security checks (not needed to run the app)
 -r requirements.txt
-coverage==7.17.3
+coverage==7.17.4
 httpx==0.28.1
 pip-audit==2.10.1
 pre-commit==4.7.0
 pytest==9.2.0
-ruff==0.17.5
+ruff==0.17.6
